@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestione Ore Lavoro</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --p:#14532d;--pm:#166534;--pl:#22c55e;--acc:#e8a020;
+  --sfondo:#f0faf4;--bianco:#fff;--testo:#14532d;--grigio:#6b8f72;
+  --bordo:#bbf7d0;--verde:#15803d;--rosso:#b83228;--arancio:#c97010;
+  --mono:'Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--sfondo);color:var(--testo);min-height:100vh;font-size:14px;}
+
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--p);}
+.lbox{background:white;border-radius:12px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.3);}
+.lbox h1{font-size:1.1rem;font-weight:800;color:var(--p);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;}
+.lbox p{font-size:0.82rem;color:var(--grigio);margin-bottom:24px;}
+.lbox .fg{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
+.lbox label{font-size:0.7rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;}
+.lbox input{border:1.5px solid var(--bordo);border-radius:5px;padding:10px 12px;font-size:0.92rem;background:var(--sfondo);}
+.lbox input:focus{outline:none;border-color:var(--pl);}
+.lbox button{width:100%;padding:11px;background:var(--p);color:white;border:none;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer;margin-top:6px;}
+#lerr{color:var(--rosso);font-size:0.82rem;font-weight:600;margin-top:10px;min-height:20px;}
+
+#app{display:none;}
+header{background:var(--p);color:white;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,0.3);}
+header h1{font-size:1rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;}
+.hright{display:flex;align-items:center;gap:10px;}
+.rbadge{font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--acc);color:var(--p);}
+.lbtn{background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 12px;border-radius:4px;font-size:0.78rem;cursor:pointer;font-weight:600;}
+.lbtn:hover{background:rgba(255,255,255,0.25);}
+
+nav{background:var(--pm);display:flex;padding:0 16px;gap:2px;flex-wrap:wrap;}
+nav button{background:none;border:none;color:rgba(255,255,255,0.55);padding:11px 14px;font-size:0.79rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;transition:color 0.12s;}
+nav button:hover{color:white;}
+nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
+
+main{padding:20px 16px;max-width:1080px;margin:0 auto;}
+.tab{display:none;}.tab.on{display:block;}
+
+.card{background:var(--bianco);border:1px solid var(--bordo);border-radius:8px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.ct{font-size:0.7rem;font-weight:800;color:var(--grigio);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--sfondo);}
+
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:0.68rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;}
+.fg input,.fg select{border:1.5px solid var(--bordo);border-radius:5px;padding:8px 10px;font-size:0.88rem;color:var(--testo);background:var(--sfondo);}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--pl);background:white;}
+.fg input[readonly]{background:#e4f5eb;cursor:default;color:var(--grigio);}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+.ga{grid-column:1/-1;}
+
+.btn{padding:8px 16px;border:none;border-radius:5px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:filter 0.12s;}
+.btn:hover{filter:brightness(0.9);}
+.bp{background:var(--p);color:white;}
+.bv{background:var(--verde);color:white;}
+.br{background:var(--rosso);color:white;padding:5px 10px;font-size:0.74rem;}
+.ba{background:var(--acc);color:var(--p);}
+.bo{background:transparent;border:1.5px solid var(--bordo);color:var(--testo);}
+.bo:hover{border-color:var(--pl);color:var(--verde);filter:none;}
+.bsm{padding:4px 10px;font-size:0.74rem;}
+.brow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;}
+
+.tw{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:0.82rem;}
+th{background:var(--sfondo);color:var(--grigio);font-size:0.66rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;text-align:left;border-bottom:2px solid var(--bordo);white-space:nowrap;}
+td{padding:8px 10px;border-bottom:1px solid var(--bordo);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#f0faf4;}
+
+.bid{font-family:var(--mono);font-size:0.74rem;background:var(--p);color:white;padding:2px 6px;border-radius:3px;font-weight:700;}
+.bmov{font-family:var(--mono);font-size:0.74rem;background:var(--pm);color:white;padding:2px 6px;border-radius:3px;}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:700;}
+.pg{background:#d3f0e3;color:var(--verde);}
+.py{background:#fdefd3;color:var(--arancio);}
+.pb{background:#dcf5e8;color:var(--verde);}
+.pr{background:#fde3e1;color:var(--rosso);}
+.po{background:#fff0d3;color:var(--arancio);}
+
+.alert{padding:9px 13px;border-radius:5px;font-size:0.82rem;font-weight:600;margin-bottom:12px;}
+.aok{background:#d3f0e3;color:var(--verde);border:1px solid #a5d9be;}
+.aerr{background:#fde3e1;color:var(--rosso);border:1px solid #f4b0ab;}
+.awarn{background:#fdefd3;color:var(--arancio);border:1px solid #f5d494;}
+
+#toast{position:fixed;bottom:20px;right:20px;z-index:999;background:var(--p);color:white;padding:10px 18px;border-radius:6px;font-size:0.84rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;}
+#toast.show{opacity:1;transform:translateY(0);}
+
+.ore-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin:10px 0;background:var(--sfondo);border:1px solid var(--bordo);}
+.ore-bar .num{font-size:1.3rem;font-weight:800;font-family:var(--mono);}
+.num.ok{color:var(--verde);}.num.warn{color:var(--arancio);}.num.err{color:var(--rosso);}
+
+.qrow{display:grid;grid-template-columns:40px 2fr 2fr 90px 1fr 80px;gap:8px;align-items:end;padding:8px 10px;border-radius:6px;background:var(--sfondo);border:1px solid var(--bordo);margin-bottom:6px;}
+.prow{display:grid;grid-template-columns:auto 2fr 2fr 80px;gap:8px;align-items:center;padding:7px 10px;border-radius:5px;background:#fff9ec;border:1px solid #f5d494;margin-bottom:5px;font-size:0.82rem;}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+.stat{background:var(--bianco);border:1px solid var(--bordo);border-radius:7px;padding:12px;text-align:center;}
+.stat .n{font-size:1.5rem;font-weight:900;color:var(--p);font-variant-numeric:tabular-nums;}
+.stat .l{font-size:0.66rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;margin-top:3px;}
+
+.empty{text-align:center;color:var(--grigio);padding:24px;font-size:0.86rem;}
+.loading{text-align:center;color:var(--grigio);padding:16px;font-size:0.82rem;}
+
+@media(max-width:640px){
+  .g4,.g5{grid-template-columns:1fr 1fr;}
+  .g3{grid-template-columns:1fr 1fr;}
+  .ga{grid-column:1/-1;}
+  .qrow{grid-template-columns:30px 1fr 1fr 70px;grid-template-rows:auto auto;}
+}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="lbox">
+    <h1>⏱ Gestione Ore</h1>
+    <p>Accedi con le tue credenziali</p>
+    <div class="fg"><label>Username</label><input id="lu" type="text" autocomplete="username"></div>
+    <div class="fg"><label>Password</label><input id="lp" type="password" autocomplete="current-password"></div>
+    <button onclick="doLogin()">Accedi</button>
+    <div id="lerr"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <h1>⏱ Gestione Ore Lavoro</h1>
+    <div class="hright">
+      <span class="rbadge" id="rbadge">—</span>
+      <button class="lbtn" onclick="doLogout()">Esci</button>
+    </div>
+  </header>
+  <nav id="mnav"></nav>
+  <main id="mc"><div class="loading">Caricamento...</div></main>
+</div>
+
+<script>
+// ============================================================
+// SUPABASE
+// ============================================================
+const SB_URL = 'https://eqtyfnluswalfassmlxd.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxdHlmbmx1c3dhbGZhc3NtbHhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzE4NzksImV4cCI6MjA5NjYwNzg3OX0.bkTpKYduJV_PVNxEt6xgu0dWHy8kjmkMExlhBaCZSyk';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+// ============================================================
+// STATO
+// ============================================================
+let ME = null;
+let _righe = [];
+let _preBatt = [];
+let _reparti = [], _attivita = [], _dips = [];
+
+// ============================================================
+// UTILS
+// ============================================================
+const oggi = () => new Date().toISOString().split('T')[0];
+
+function calcOre(ini, fin) {
+  if (!ini || !fin) return 0;
+  const [h1,m1]=ini.split(':').map(Number), [h2,m2]=fin.split(':').map(Number);
+  let d=(h2*60+m2)-(h1*60+m1);
+  if(d<=0) d+=1440;
+  return Math.round(d/60*100)/100;
+}
+
+function toast(msg, tipo='ok') {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=tipo==='ok'?'#15803d':tipo==='warn'?'#c97010':'#b83228';
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('show'),2600);
+}
+
+function nomeDip(id) {
+  const d=_dips.find(x=>x.ID_Dipendente==id);
+  return d?d.Nome:id;
+}
+function nomeRep(id) {
+  const r=_reparti.find(x=>x.ID_Reparto==id);
+  return r?r.NomeReparto:id;
+}
+function nomeAtt(id) {
+  const a=_attivita.find(x=>x.ID_Attivita==id);
+  return a?a.NomeAttivita:id;
+}
+
+// ============================================================
+// CARICA DATI BASE
+// ============================================================
+async function caricaDatiBase() {
+  const [{data:d},{data:r},{data:a}] = await Promise.all([
+    sb.from('Dipendenti').select('*').order('Nome'),
+    sb.from('Reparti').select('*').order('NomeReparto'),
+    sb.from('Attivita').select('*').order('NomeAttivita')
+  ]);
+  _dips = d||[];
+  _reparti = r||[];
+  _attivita = a||[];
+}
+
+// ============================================================
+// LOGIN
+// ============================================================
+document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+async function doLogin() {
+  const user=document.getElementById('lu').value.trim();
+  const pass=document.getElementById('lp').value.trim();
+  const err=document.getElementById('lerr');
+  err.textContent='Verifica...';
+  try {
+    const {data,error}=await sb.from('Utenti').select('*').eq('Username',user).eq('Password',pass);
+    if(error) throw error;
+    if(!data||data.length===0){err.textContent='Username o password errati.';return;}
+    ME={username:data[0].Username, ruolo:data[0].Ruolo};
+    err.textContent='';
+    await caricaDatiBase();
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('rbadge').textContent=ME.ruolo==='admin'?'👑 Amministratore':'🔧 Responsabile';
+    buildNav();
+    showFirstTab();
+  } catch(e) {
+    err.textContent='Errore connessione: '+e.message;
+  }
+}
+
+function doLogout() {
+  ME=null;
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('lp').value='';
+  document.getElementById('lu').value='';
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function buildNav() {
+  const tabs = ME.ruolo==='admin'
+    ? [['ti','✏️ Inserimento'],['tr','🔧 Ore Rapide'],['ta','🗄 Archivio'],['td','👥 Dipendenti'],['te','📤 Esporta']]
+    : [['tr','🔧 Ore Rapide']];
+  document.getElementById('mnav').innerHTML=tabs.map(([id,l])=>
+    `<button id="nb-${id}" onclick="showTab('${id}')">${l}</button>`).join('');
+}
+function showFirstTab(){showTab(ME.ruolo==='admin'?'ti':'tr');}
+
+async function showTab(id) {
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
+  const nb=document.getElementById('nb-'+id);
+  if(nb)nb.classList.add('on');
+  document.getElementById('mc').innerHTML='<div class="loading">Caricamento...</div>';
+  await caricaDatiBase();
+  if(id==='ti') renderInserimento();
+  else if(id==='tr') renderRapido();
+  else if(id==='ta') renderArchivio();
+  else if(id==='td') renderDipendenti();
+  else if(id==='te') renderExport();
+}
+
+// ============================================================
+// SELECTS HELPERS
+// ============================================================
+function optDips(selected='') {
+  return _dips.map(d=>`<option value="${d.ID_Dipendente}" ${d.ID_Dipendente==selected?'selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');
+}
+function optReps(selected='') {
+  return _reparti.map(r=>`<option value="${r.ID_Reparto}" ${r.ID_Reparto==selected?'selected':''}>${r.NomeReparto}</option>`).join('');
+}
+function optAtts(idRep='', selected='') {
+  const filtrate = idRep ? _attivita.filter(a=>a.ID_Reparto==idRep) : _attivita;
+  return filtrate.map(a=>`<option value="${a.ID_Attivita}" ${a.ID_Attivita==selected?'selected':''}>${a.NomeAttivita}</option>`).join('');
+}
+
+// ============================================================
+// TAB: ORE RAPIDE (RESPONSABILE)
+// ============================================================
+async function renderRapido() {
+  const {data:ultimi}=await sb.from('BattesimiPreTurno').select('*').order('created_at',{ascending:false}).limit(20);
+  const righeU=(ultimi||[]).map(m=>`
+    <tr>
+      <td><span class="bmov">PRE-${m.id}</span></td>
+      <td><span class="bid">${m.ID_Dipendente}</span></td>
+      <td>${nomeDip(m.ID_Dipendente)}</td>
+      <td>${m.Data}</td>
+      <td><span class="pill py">${nomeRep(m.ID_Reparto)}</span></td>
+      <td><span class="pill pg">${nomeAtt(m.ID_Attivita)}</span></td>
+      <td><strong>${m.OreBattezzate}h</strong></td>
+      <td style="font-size:0.78rem;color:var(--grigio);">${m.Note||'—'}</td>
+      <td><button class="btn br bsm" onclick="eliminaPreBatt(${m.id})">✕</button></td>
+    </tr>`).join('')||'<tr><td colspan="9" class="empty">Nessuna registrazione recente</td></tr>';
+
+  document.getElementById('mc').innerHTML=`
+  <div class="card">
+    <div class="ct">🔧 Registra ore al volo</div>
+    <div id="rmsg"></div>
+    <div class="g4">
+      <div class="fg"><label>Dipendente</label><select id="r-dip"><option value="">— Seleziona —</option>${optDips()}</select></div>
+      <div class="fg"><label>Data</label><input id="r-data" type="date" value="${oggi()}"></div>
+      <div class="fg"><label>Reparto</label><select id="r-rep" onchange="aggiornaAttRapido()"><option value="">— Seleziona —</option>${optReps()}</select></div>
+      <div class="fg"><label>Attività</label><select id="r-att"><option value="">— Prima seleziona reparto —</option></select></div>
+      <div class="fg"><label>Ore</label><input id="r-ore" type="number" min="0.5" max="24" step="0.5" placeholder="es. 4"></div>
+      <div class="fg"><label>Note (opz.)</label><input id="r-note" type="text"></div>
+    </div>
+    <div class="brow"><button class="btn bv" onclick="salvaRapido()">✔ Salva ore</button></div>
+  </div>
+  <div class="card">
+    <div class="ct">Ultime ore registrate</div>
+    <div class="tw"><table>
+      <thead><tr><th>ID</th><th>ID Dip</th><th>Dipendente</th><th>Data</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th><th></th></tr></thead>
+      <tbody>${righeU}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function aggiornaAttRapido() {
+  const idRep=document.getElementById('r-rep')?.value||'';
+  const el=document.getElementById('r-att');
+  if(el) el.innerHTML=`<option value="">— Seleziona —</option>${optAtts(idRep)}`;
+}
+
+async function salvaRapido() {
+  const ID_Dipendente=document.getElementById('r-dip').value;
+  const Data=document.getElementById('r-data').value;
+  const ID_Reparto=document.getElementById('r-rep').value;
+  const ID_Attivita=document.getElementById('r-att').value;
+  const OreBattezzate=parseFloat(document.getElementById('r-ore').value);
+  const Note=document.getElementById('r-note').value.trim();
+  const msg=document.getElementById('rmsg');
+  if(!ID_Dipendente||!Data||!ID_Reparto||!ID_Attivita||!OreBattezzate){
+    msg.innerHTML='<div class="alert aerr">Compila tutti i campi obbligatori.</div>';return;
+  }
+  const {error}=await sb.from('BattesimiPreTurno').insert({ID_Dipendente,Data,ID_Reparto,ID_Attivita,OreBattezzate,Note});
+  if(error){msg.innerHTML=`<div class="alert aerr">Errore: ${error.message}</div>`;return;}
+  toast('✔ Ore salvate');
+  showTab('tr');
+}
+
+async function eliminaPreBatt(id) {
+  if(!confirm('Eliminare?')) return;
+  await sb.from('BattesimiPreTurno').delete().eq('id',id);
+  toast('Eliminato','warn'); showTab('tr');
+}
+
+// ============================================================
+// TAB: INSERIMENTO ADMIN
+// ============================================================
+async function renderInserimento() {
+  const {data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(15);
+  const righeGG=await Promise.all((ggs||[]).map(async g=>{
+    const {data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',g.ID_Turno);
+    return `<tr>
+      <td><span class="bid">${g.ID_Dipendente}</span></td>
+      <td>${nomeDip(g.ID_Dipendente)}</td>
+      <td>${g.DataInizio}</td>
+      <td class="mono">${g.OraInizio||'—'}</td>
+      <td class="mono">${g.OraFine||'—'}</td>
+      <td>${g.Ore_A||0}h + ${g.Ore_B||0}h</td>
+      <td><span class="pill pb">${(bs||[]).length} bat.</span></td>
+      <td><button class="btn br bsm" onclick="eliminaTurno(${g.ID_Turno})">✕</button></td>
+    </tr>`;
+  }));
+
+  document.getElementById('mc').innerHTML=`
+  <div id="imsg"></div>
+  <div class="card">
+    <div class="ct">1 — Testata turno</div>
+    <div class="g4">
+      <div class="fg"><label>Dipendente</label>
+        <select id="i-dip" onchange="caricaPreBattAdmin()"><option value="">— Seleziona —</option>${optDips()}</select>
+      </div>
+      <div class="fg"><label>Data inizio</label><input id="i-data" type="date" value="${oggi()}" onchange="caricaPreBattAdmin()"></div>
+      <div class="fg"><label>Ora inizio</label><input id="i-ini" type="time" onchange="calcOreTurno()"></div>
+      <div class="fg"><label>Ora fine</label><input id="i-fin" type="time" onchange="calcOreTurno()"></div>
+      <div class="fg"><label>Ore giorno A</label><input id="i-orea" type="text" readonly placeholder="—"></div>
+      <div class="fg"><label>Ore giorno B (+1gg)</label><input id="i-oreb" type="text" readonly placeholder="—"></div>
+      <div class="fg"><label>Ore totali</label><input id="i-oretot" type="text" readonly placeholder="—"></div>
+    </div>
+  </div>
+
+  <div class="card" id="cbatt" style="display:none;">
+    <div class="ct">2 — Battesimo ore per reparto / attività</div>
+    <div id="prebatt-box"></div>
+    <div class="ore-bar">
+      <div>
+        <div style="font-size:0.68rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Rimanenti</div>
+        <div class="num ok" id="ore-rim">—</div>
+      </div>
+      <div style="flex:1;height:8px;background:var(--bordo);border-radius:4px;overflow:hidden;">
+        <div id="barra" style="height:100%;width:0%;background:var(--verde);border-radius:4px;transition:width 0.3s,background 0.3s;"></div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:0.68rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Battezzate</div>
+        <div class="num ok" id="ore-batt">0h</div>
+      </div>
+    </div>
+    <div style="font-size:0.68rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">N° — Reparto — Attività — Ore — Note</div>
+    <div id="righe-ore"></div>
+    <div class="brow">
+      <button class="btn bo bsm" onclick="addRiga()">+ Aggiungi riga</button>
+    </div>
+    <div class="brow" style="margin-top:16px;border-top:1px solid var(--sfondo);padding-top:12px;">
+      <button class="btn bv" onclick="salvaTurno()">✔ Salva turno</button>
+      <button class="btn bo" onclick="resetIns()">✕ Annulla</button>
+    </div>
+  </div>
+
+  <div id="bavanza">
+    <button class="btn bp" onclick="avanzaBatt()" style="width:100%;padding:12px;">Avanti → Battesimo ore</button>
+  </div>
+
+  <div class="card" style="margin-top:18px;">
+    <div class="ct">Ultimi turni inseriti</div>
+    <div class="tw"><table>
+      <thead><tr><th>ID Dip</th><th>Nome</th><th>Data</th><th>Inizio</th><th>Fine</th><th>Ore A+B</th><th>Battesimi</th><th></th></tr></thead>
+      <tbody>${righeGG.join('')||'<tr><td colspan="8" class="empty">Nessun turno inserito</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function calcOreTurno() {
+  const ini=document.getElementById('i-ini')?.value;
+  const fin=document.getElementById('i-fin')?.value;
+  if(!ini||!fin) return;
+  const tot=calcOre(ini,fin);
+  const notturno=fin<ini;
+  // Ore_A = ore nella data di inizio (fino a mezzanotte), Ore_B = ore nel giorno dopo
+  let oreA=tot, oreB=0;
+  if(notturno){
+    const [h1,m1]=ini.split(':').map(Number);
+    oreA=Math.round((24*60-(h1*60+m1))/60*100)/100;
+    oreB=Math.round((tot-oreA)*100)/100;
+  }
+  const elA=document.getElementById('i-orea');
+  const elB=document.getElementById('i-oreb');
+  const elT=document.getElementById('i-oretot');
+  if(elA) elA.value=oreA+'h';
+  if(elB) elB.value=oreB>0?oreB+'h':'0h';
+  if(elT) elT.value=tot+'h'+(notturno?' (+1gg)':'');
+  aggBar();
+}
+
+async function caricaPreBattAdmin() {
+  const id=document.getElementById('i-dip')?.value;
+  const data=document.getElementById('i-data')?.value;
+  if(!id||!data) return;
+  const {data:pre}=await sb.from('BattesimiPreTurno').select('*').eq('ID_Dipendente',id).eq('Data',data);
+  _preBatt=pre||[];
+  renderPreBattBox();
+  aggBar();
+}
+
+function renderPreBattBox() {
+  const box=document.getElementById('prebatt-box');
+  if(!box) return;
+  if(!_preBatt.length){box.innerHTML='';return;}
+  box.innerHTML=`<div style="margin-bottom:10px;">
+    <div style="font-size:0.68rem;font-weight:800;color:var(--arancio);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">
+      ⚠ ${_preBatt.length} ore pre-battezzate dal responsabile — incluse nel conteggio
+    </div>
+    ${_preBatt.map(m=>`<div class="prow">
+      <span class="pill po">resp.</span>
+      <span><span class="pill py">${nomeRep(m.ID_Reparto)}</span></span>
+      <span><span class="pill pg">${nomeAtt(m.ID_Attivita)}</span></span>
+      <strong>${m.OreBattezzate}h</strong>
+    </div>`).join('')}
+  </div>`;
+}
+
+async function avanzaBatt() {
+  const id=document.getElementById('i-dip')?.value;
+  const data=document.getElementById('i-data')?.value;
+  const ini=document.getElementById('i-ini')?.value;
+  const fin=document.getElementById('i-fin')?.value;
+  const msg=document.getElementById('imsg');
+  if(!id||!data||!ini||!fin){msg.innerHTML='<div class="alert aerr">Compila tutti i campi.</div>';return;}
+  const ore=calcOre(ini,fin);
+  if(ore<=0){msg.innerHTML='<div class="alert aerr">Orario non valido.</div>';return;}
+  await caricaPreBattAdmin();
+  document.getElementById('cbatt').style.display='block';
+  document.getElementById('bavanza').style.display='none';
+  _righe=[];
+  if(_preBatt.length===0) addRiga();
+  else renderRighe();
+  aggBar();
+}
+
+function addRiga() {
+  _righe.push({ID_Reparto:'',ID_Attivita:'',OreBattezzate:'',Note:''});
+  renderRighe(); aggBar();
+}
+
+function renderRighe() {
+  const wrap=document.getElementById('righe-ore');
+  if(!wrap) return;
+  wrap.innerHTML=_righe.map((r,i)=>`
+    <div class="qrow">
+      <div style="font-family:var(--mono);font-size:0.78rem;color:var(--grigio);padding-top:22px;font-weight:700;">${i+1}</div>
+      <div class="fg"><label>Reparto</label>
+        <select onchange="rigaRepChange(${i},this.value)">
+          <option value="">— Seleziona —</option>${optReps(r.ID_Reparto)}
+        </select>
+      </div>
+      <div class="fg"><label>Attività</label>
+        <select id="ratt-${i}" onchange="_righe[${i}].ID_Attivita=this.value;aggBar()">
+          <option value="">— Prima reparto —</option>${optAtts(r.ID_Reparto,r.ID_Attivita)}
+        </select>
+      </div>
+      <div class="fg"><label>Ore</label>
+        <input type="number" min="0.5" max="24" step="0.5" value="${r.OreBattezzate||''}" placeholder="0"
+          oninput="_righe[${i}].OreBattezzate=parseFloat(this.value)||0;aggBar()">
+      </div>
+      <div class="fg"><label>Note</label>
+        <input type="text" value="${r.Note||''}" placeholder="opz."
+          oninput="_righe[${i}].Note=this.value">
+      </div>
+      <div class="fg" style="align-items:flex-end;"><label>&nbsp;</label>
+        <button class="btn br bsm" onclick="removeRiga(${i})" ${_righe.length<=1?'disabled':''}>✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function rigaRepChange(i, idRep) {
+  _righe[i].ID_Reparto=idRep;
+  _righe[i].ID_Attivita='';
+  const el=document.getElementById('ratt-'+i);
+  if(el) el.innerHTML=`<option value="">— Seleziona —</option>${optAtts(idRep)}`;
+  aggBar();
+}
+
+function removeRiga(i){if(_righe.length<=1)return;_righe.splice(i,1);renderRighe();aggBar();}
+
+function oreTotN(){
+  const ini=document.getElementById('i-ini')?.value;
+  const fin=document.getElementById('i-fin')?.value;
+  return calcOre(ini,fin);
+}
+function oreBattN(){
+  const fr=_righe.reduce((a,r)=>a+(parseFloat(r.OreBattezzate)||0),0);
+  const fp=_preBatt.reduce((a,m)=>a+m.OreBattezzate,0);
+  return Math.round((fr+fp)*100)/100;
+}
+
+function aggBar(){
+  const tot=oreTotN(), batt=oreBattN(), rim=Math.round((tot-batt)*100)/100;
+  const pct=tot>0?Math.min(100,Math.round(batt/tot*100)):0;
+  const er=document.getElementById('ore-rim'), eb=document.getElementById('ore-batt'), bar=document.getElementById('barra');
+  if(!er) return;
+  er.textContent=rim+'h'; eb.textContent=batt+'h';
+  er.className='num '+(rim===0?'ok':rim<0?'err':'warn');
+  if(bar){bar.style.width=pct+'%';bar.style.background=rim===0?'#15803d':rim<0?'#b83228':'#c97010';}
+}
+
+async function salvaTurno() {
+  const ID_Dipendente=document.getElementById('i-dip').value;
+  const DataInizio=document.getElementById('i-data').value;
+  const OraInizio=document.getElementById('i-ini').value;
+  const OraFine=document.getElementById('i-fin').value;
+  const msg=document.getElementById('imsg');
+  const tot=oreTotN(), batt=oreBattN();
+  const notturno=OraFine<OraInizio;
+  const [h1,m1]=OraInizio.split(':').map(Number);
+  const Ore_A=notturno?Math.round((24*60-(h1*60+m1))/60*100)/100:tot;
+  const Ore_B=notturno?Math.round((tot-Ore_A)*100)/100:0;
+
+  for(let i=0;i<_righe.length;i++){
+    const r=_righe[i];
+    if(!r.ID_Reparto||!r.ID_Attivita||!r.OreBattezzate){
+      msg.innerHTML=`<div class="alert aerr">Riga ${i+1}: compila reparto, attività e ore.</div>`;return;
+    }
+  }
+  const diff=Math.round((tot-batt)*100)/100;
+  if(diff!==0){msg.innerHTML=`<div class="alert aerr">Le ore battezzate (${batt}h) non corrispondono alle ore totali (${tot}h). Differenza: ${diff}h</div>`;return;}
+
+  // rimuovi turno esistente stesso dip+data
+  const {data:old}=await sb.from('TurniGiornalieri').select('ID_Turno').eq('ID_Dipendente',ID_Dipendente).eq('DataInizio',DataInizio).single();
+  if(old){
+    await sb.from('BattesimiTurno').delete().eq('ID_Turno',old.ID_Turno);
+    await sb.from('TurniGiornalieri').delete().eq('ID_Turno',old.ID_Turno);
+  }
+
+  const {data:turno,error:et}=await sb.from('TurniGiornalieri').insert({ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B}).select().single();
+  if(et){msg.innerHTML=`<div class="alert aerr">${et.message}</div>`;return;}
+
+  // salva righe nuove
+  for(let i=0;i<_righe.length;i++){
+    const r=_righe[i];
+    await sb.from('BattesimiTurno').insert({ID_Turno:turno.ID_Turno,OrdineRiga:i+1,ID_Reparto:r.ID_Reparto,ID_Attivita:r.ID_Attivita,OreBattezzate:parseFloat(r.OreBattezzate),Note:r.Note||''});
+  }
+  // collega i pre-battesimi al turno
+  for(const p of _preBatt){
+    await sb.from('BattesimiTurno').insert({ID_Turno:turno.ID_Turno,OrdineRiga:99,ID_Reparto:p.ID_Reparto,ID_Attivita:p.ID_Attivita,OreBattezzate:p.OreBattezzate,Note:p.Note||''});
+    await sb.from('BattesimiPreTurno').delete().eq('id',p.id);
+  }
+
+  toast('✔ Turno salvato');
+  resetIns();
+  showTab('ti');
+}
+
+function resetIns(){
+  ['i-dip','i-data','i-ini','i-fin','i-orea','i-oreb','i-oretot'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
+  const cb=document.getElementById('cbatt'), bav=document.getElementById('bavanza');
+  if(cb)cb.style.display='none'; if(bav)bav.style.display='block';
+  _righe=[];_preBatt=[];
+}
+
+async function eliminaTurno(id){
+  if(!confirm('Eliminare questo turno e i suoi battesimi?')) return;
+  await sb.from('BattesimiTurno').delete().eq('ID_Turno',id);
+  await sb.from('TurniGiornalieri').delete().eq('ID_Turno',id);
+  toast('Eliminato','warn'); showTab('ti');
+}
+
+// ============================================================
+// TAB: ARCHIVIO
+// ============================================================
+async function renderArchivio() {
+  const {data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(200);
+  const {data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(500);
+  const totOre=(bats||[]).reduce((a,b)=>a+b.OreBattezzate,0);
+
+  const stats=`<div class="stats">
+    <div class="stat"><div class="n">${_dips.length}</div><div class="l">Dipendenti</div></div>
+    <div class="stat"><div class="n">${(ggs||[]).length}</div><div class="l">Turni totali</div></div>
+    <div class="stat"><div class="n">${(bats||[]).length}</div><div class="l">Battesimi</div></div>
+    <div class="stat"><div class="n">${totOre.toFixed(1)}</div><div class="l">Ore archiviate</div></div>
+  </div>`;
+
+  const righeB=(bats||[]).map(b=>{
+    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+    return `<tr>
+      <td><span class="bmov">${b.ID_Battesimo||b.id}</span></td>
+      <td><span class="bid">${g?.ID_Dipendente||'—'}</span></td>
+      <td>${nomeDip(g?.ID_Dipendente)}</td>
+      <td>${g?.DataInizio||'—'}</td>
+      <td>${b.OrdineRiga}</td>
+      <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
+      <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
+      <td><strong>${b.OreBattezzate}h</strong></td>
+      <td style="font-size:0.78rem;color:var(--grigio);">${b.Note||'—'}</td>
+    </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun dato</td></tr>';
+
+  document.getElementById('mc').innerHTML=`
+  ${stats}
+  <div class="card">
+    <div class="ct">Filtri</div>
+    <div class="g4">
+      <div class="fg"><label>Dipendente</label><select id="f-dip"><option value="">Tutti</option>${optDips()}</select></div>
+      <div class="fg"><label>Dal</label><input id="f-dal" type="date"></div>
+      <div class="fg"><label>Al</label><input id="f-al" type="date"></div>
+      <div class="fg"><label>Reparto</label><select id="f-rep"><option value="">Tutti</option>${optReps()}</select></div>
+    </div>
+    <div class="brow"><button class="btn bp bsm" onclick="filtraArch()">🔍 Filtra</button></div>
+  </div>
+  <div class="card">
+    <div class="ct">Battesimi</div>
+    <div class="tw"><table>
+      <thead><tr><th>ID Bat.</th><th>ID Dip</th><th>Nome</th><th>Data</th><th>Riga</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th></tr></thead>
+      <tbody id="tbody-arch">${righeB}</tbody>
+    </table></div>
+  </div>`;
+}
+
+async function filtraArch(){
+  const fd=document.getElementById('f-dip')?.value||'';
+  const dal=document.getElementById('f-dal')?.value||'';
+  const al=document.getElementById('f-al')?.value||'';
+  const frep=document.getElementById('f-rep')?.value||'';
+
+  let qgg=sb.from('TurniGiornalieri').select('*');
+  if(fd) qgg=qgg.eq('ID_Dipendente',fd);
+  if(dal) qgg=qgg.gte('DataInizio',dal);
+  if(al) qgg=qgg.lte('DataInizio',al);
+  const {data:ggs}=await qgg;
+  const idTurni=(ggs||[]).map(g=>g.ID_Turno);
+  if(!idTurni.length){document.getElementById('tbody-arch').innerHTML='<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';return;}
+
+  let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni);
+  if(frep) qb=qb.eq('ID_Reparto',frep);
+  const {data:bats}=await qb;
+
+  document.getElementById('tbody-arch').innerHTML=(bats||[]).map(b=>{
+    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+    return `<tr>
+      <td><span class="bmov">${b.ID_Battesimo||b.id}</span></td>
+      <td><span class="bid">${g?.ID_Dipendente||'—'}</span></td>
+      <td>${nomeDip(g?.ID_Dipendente)}</td>
+      <td>${g?.DataInizio||'—'}</td>
+      <td>${b.OrdineRiga}</td>
+      <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
+      <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
+      <td><strong>${b.OreBattezzate}h</strong></td>
+      <td style="font-size:0.78rem;color:var(--grigio);">${b.Note||'—'}</td>
+    </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';
+}
+
+// ============================================================
+// TAB: DIPENDENTI
+// ============================================================
+async function renderDipendenti() {
+  document.getElementById('mc').innerHTML=`
+  <div id="dmsg"></div>
+  <div class="card">
+    <div class="ct">Elenco dipendenti</div>
+    <div class="tw"><table>
+      <thead><tr><th>ID</th><th>Nome</th></tr></thead>
+      <tbody>${_dips.map(d=>`<tr><td><span class="bid">${d.ID_Dipendente}</span></td><td>${d.Nome}</td></tr>`).join('')||'<tr><td colspan="2" class="empty">Nessun dipendente</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+// ============================================================
+// TAB: EXPORT
+// ============================================================
+function renderExport() {
+  document.getElementById('mc').innerHTML=`
+  <div class="card">
+    <div class="ct">Esporta CSV per Microsoft Access</div>
+    <p style="color:var(--grigio);font-size:0.84rem;margin-bottom:14px;line-height:1.6;">
+      Separatore <strong>punto e virgola</strong>, BOM UTF-8. Pronti per importazione in Access.
+    </p>
+    <div class="g2" style="margin-bottom:16px;">
+      <div class="fg"><label>Dal (opz.)</label><input id="e-dal" type="date"></div>
+      <div class="fg"><label>Al (opz.)</label><input id="e-al" type="date"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+      <div class="card" style="margin:0;"><div class="ct">TURNI.csv</div>
+        <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:10px;">ID_Dip, Data, Inizio, Fine, Ore_A, Ore_B</p>
+        <button class="btn ba" onclick="exportCSV('turni')">⬇ Scarica</button></div>
+      <div class="card" style="margin:0;"><div class="ct">BATTESIMI.csv</div>
+        <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:10px;">ID_Turno, ID_Dip, Data, Ordine, Reparto, Attività, Ore</p>
+        <button class="btn ba" onclick="exportCSV('batt')">⬇ Scarica</button></div>
+      <div class="card" style="margin:0;border:2px dashed var(--acc);"><div class="ct">COMPLETO.csv</div>
+        <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:10px;">Tutto unito — una riga per battesimo</p>
+        <button class="btn bp" onclick="exportCSV('all')">⬇ Tutto</button></div>
+    </div>
+  </div>`;
+}
+
+async function exportCSV(tipo){
+  const dal=document.getElementById('e-dal')?.value||'';
+  const al=document.getElementById('e-al')?.value||'';
+  let qgg=sb.from('TurniGiornalieri').select('*').order('DataInizio');
+  if(dal) qgg=qgg.gte('DataInizio',dal);
+  if(al) qgg=qgg.lte('DataInizio',al);
+  const {data:ggs}=await qgg;
+  const {data:bats}=await sb.from('BattesimiTurno').select('*');
+  let csv='',nome='';
+  if(tipo==='turni'){
+    nome='TURNI.csv';
+    csv='ID_Turno;ID_Dipendente;Nome;DataInizio;OraInizio;OraFine;Ore_A;Ore_B\n';
+    csv+=(ggs||[]).map(g=>[g.ID_Turno,g.ID_Dipendente,nomeDip(g.ID_Dipendente),g.DataInizio,g.OraInizio||'',g.OraFine||'',g.Ore_A||0,g.Ore_B||0].join(';')).join('\n');
+  } else if(tipo==='batt'){
+    nome='BATTESIMI.csv';
+    csv='ID_Battesimo;ID_Turno;ID_Dipendente;Nome;Data;OrdineRiga;ID_Reparto;NomeReparto;ID_Attivita;NomeAttivita;OreBattezzate;Note\n';
+    csv+=(bats||[]).map(b=>{
+      const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+      if(g&&dal&&g.DataInizio<dal) return null;
+      if(g&&al&&g.DataInizio>al) return null;
+      return [b.ID_Battesimo||b.id,b.ID_Turno,g?.ID_Dipendente||'',nomeDip(g?.ID_Dipendente),g?.DataInizio||'',b.OrdineRiga,b.ID_Reparto,nomeRep(b.ID_Reparto),b.ID_Attivita,nomeAtt(b.ID_Attivita),b.OreBattezzate,b.Note||''].join(';');
+    }).filter(Boolean).join('\n');
+  } else {
+    nome='COMPLETO.csv';
+    csv='ID_Battesimo;ID_Turno;ID_Dipendente;Nome;DataInizio;OraInizio;OraFine;Ore_A;Ore_B;OrdineRiga;ID_Reparto;NomeReparto;ID_Attivita;NomeAttivita;OreBattezzate;Note\n';
+    csv+=(bats||[]).map(b=>{
+      const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+      if(!g) return null;
+      if(dal&&g.DataInizio<dal) return null;
+      if(al&&g.DataInizio>al) return null;
+      return [b.ID_Battesimo||b.id,b.ID_Turno,g.ID_Dipendente,nomeDip(g.ID_Dipendente),g.DataInizio,g.OraInizio||'',g.OraFine||'',g.Ore_A||0,g.Ore_B||0,b.OrdineRiga,b.ID_Reparto,nomeRep(b.ID_Reparto),b.ID_Attivita,nomeAtt(b.ID_Attivita),b.OreBattezzate,b.Note||''].join(';');
+    }).filter(Boolean).join('\n');
+  }
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;a.click();
+}
+</script>
+</body>
+</html>
