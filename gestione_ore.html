@@ -869,28 +869,33 @@ async function caricaReport(){
   const cont=document.getElementById('report-content');
   cont.innerHTML='<div class="loading">⏳ Elaborazione dati...</div>';
 
-  // Calcola numero di giorni del periodo per ripartire costi mezzi
+  // Numero di giorni del periodo
   const dataD=new Date(dal||'2026-01-01');
   const dataA=new Date(al||oggi());
   const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
 
-  // Carica tutti i turni del periodo
-  let qgg=sb.from('TurniGiornalieri').select('*');
+  // Carica MovimentiOre (fonte primaria per ore per reparto)
+  let qmov=sb.from('MovimentiOre').select('*');
+  if(dal)qmov=qmov.gte('DataCompetenza',dal);
+  if(al)qmov=qmov.lte('DataCompetenza',al);
+  if(frep){
+    // Mappa ID reparto → nome reparto per filtro
+    const nomeRepFiltro=_reparti.find(r=>r.ID_Reparto==frep)?.NomeReparto||'';
+    if(nomeRepFiltro)qmov=qmov.eq('NomeReparto',nomeRepFiltro);
+  }
+  const{data:movimenti}=await qmov;
+
+  // Carica turni per collegare dipendente → contratto/livello
+  let qgg=sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,Ore_A,Ore_B,OreNotte_A,OreNotte_B,OreFestive_A,OreFestive_B,OreNotteFestive_A,OreNotteFestive_B');
   if(dal)qgg=qgg.gte('DataInizio',dal);
   if(al)qgg=qgg.lte('DataInizio',al);
   const{data:ggs}=await qgg;
-  const idTurni=(ggs||[]).map(g=>g.ID_Turno);
-
-  // Carica TUTTI i battesimi dei turni (senza filtro reparto — serve per timeline)
-  let batsAll=[];
-  if(idTurni.length){
-    const{data:b}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni).order('ID_Turno').order('OrdineRiga');
-    batsAll=b||[];
-  }
+  const turniMap={};
+  (ggs||[]).forEach(g=>turniMap[g.ID_Turno]=g);
 
   // Tariffe
-  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
   const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
+  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
   const{data:costiMezzi}=await sb.from('CostiMezziReparti').select('*');
 
   // Produzione reparti
@@ -907,27 +912,29 @@ async function caricaReport(){
     .eq('ID_Attivita',15);
 
   // =============================================================
-  // CALCOLO COSTO E RICAVO PER BATTESIMO (logica cronologica)
+  // CALCOLO COSTO E RICAVO DA MOVIMENTI ORE
   // =============================================================
-  // Raggruppa battesimi per turno in ordine
-  const batsByTurno={};
-  batsAll.forEach(b=>{
-    if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];
-    batsByTurno[b.ID_Turno].push(b);
-  });
-  // Ordina per OrdineRiga
-  Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
-
-  // Per ogni battesimo calcola ore per tipologia e costo/ricavo
-  const costoPerReparto={};  // {id_rep: {costo, ore, oreNotte, oreFest}}
+  const costoPerReparto={};
   const ricavoPerReparto={};
+  const costoPerDipMap={};
   let costoTotale=0, ricavoTotale=0;
 
-  (ggs||[]).forEach(turno=>{
-    const bats=batsByTurno[turno.ID_Turno]||[];
-    if(!bats.length)return;
+  // Mappa nome reparto → ID reparto
+  const repNomeToId={};
+  (_reparti||[]).forEach(r=>repNomeToId[r.NomeReparto]=r.ID_Reparto);
+
+  (movimenti||[]).forEach(mov=>{
+    const turno=turniMap[mov.ID_Turno];
+    if(!turno)return;
     const d=_dips.find(x=>x.ID_Dipendente==turno.ID_Dipendente);
     if(!d)return;
+
+    // Ore già suddivise per tipologia nel movimento
+    const oreOrd=Math.max(0,(mov.OreTotali||0)-(mov.OreNotturne||0)-(mov.OreFestive||0)-(mov.OreNotteFestive||0));
+    const oreN=mov.OreNotturne||0;
+    const oreF=mov.OreFestive||0;
+    const oreNF=mov.OreNotteFestive||0;
+
     // Tariffa costo dipendente
     const lv=_livelli.filter(x=>x.ID_Livello==d.ID_Livello&&(!x.DataFine||x.DataFine>=turno.DataInizio)&&(!x.DataInizio||x.DataInizio<=turno.DataInizio)).sort((a,b)=>(b.DataInizio||'').localeCompare(a.DataInizio||''))[0]||_livelli.find(x=>x.ID_Livello==d.ID_Livello);
     const contDip=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
@@ -935,36 +942,36 @@ async function caricaReport(){
     const maggiorN=contDip?.MaggiorazioneNotturno||0;
     const maggiorF=contDip?.MaggiorazioneFestivo||0;
     const maggiorNF=contDip?.MaggiorazioneNotteFestivo||0;
-    // Tariffa ricavo economia
-    const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=turno.DataInizio&&(!x.DataFine||x.DataFine>=turno.DataInizio)).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
 
-    bats.forEach((bat,idx)=>{
-      const rep=bat.ID_Reparto;
-      // Salta se filtro reparto attivo e non corrisponde
-      if(frep && rep!=frep) return;
+    // COSTO
+    const costo=oreOrd*costoBase+oreN*costoBase*(1+maggiorN)+oreF*costoBase*(1+maggiorF)+oreNF*costoBase*(1+maggiorNF);
+    costoTotale+=costo;
 
-      // Calcola ore per tipologia usando timeline cronologica
-      const tip=calcolaOreBattesimoPerTipologia(turno, batsByTurno[turno.ID_Turno], idx, turno.DataInizio);
+    const repId=repNomeToId[mov.NomeReparto]||mov.NomeReparto;
+    if(!costoPerReparto[repId])costoPerReparto[repId]={costo:0,ore:0,oreNotte:0,oreFest:0,oreNotteFest:0,nomeRep:mov.NomeReparto};
+    costoPerReparto[repId].costo+=costo;
+    costoPerReparto[repId].ore+=mov.OreTotali||0;
+    costoPerReparto[repId].oreNotte+=oreN;
+    costoPerReparto[repId].oreFest+=oreF;
+    costoPerReparto[repId].oreNotteFest+=oreNF;
 
-      // COSTO (tariffa contratto dipendente)
-      const costo=tip.ord*costoBase + tip.notte*costoBase*(1+maggiorN) + tip.fest*costoBase*(1+maggiorF) + tip.notteFest*costoBase*(1+maggiorNF);
-      costoTotale+=costo;
-      if(!costoPerReparto[rep])costoPerReparto[rep]={costo:0,ore:0,oreNotte:0,oreFest:0,oreNotteFest:0};
-      costoPerReparto[rep].costo+=costo;
-      costoPerReparto[rep].ore+=bat.OreBattezzate||0;
-      costoPerReparto[rep].oreNotte+=tip.notte;
-      costoPerReparto[rep].oreFest+=tip.fest;
-      costoPerReparto[rep].oreNotteFest+=tip.notteFest;
+    // Costo per dipendente
+    if(!costoPerDipMap[d.ID_Dipendente])costoPerDipMap[d.ID_Dipendente]={nome:d.Nome,ore:0,oreNotte:0,oreFest:0,costo:0};
+    costoPerDipMap[d.ID_Dipendente].ore+=mov.OreTotali||0;
+    costoPerDipMap[d.ID_Dipendente].oreNotte+=oreN;
+    costoPerDipMap[d.ID_Dipendente].oreFest+=oreF;
+    costoPerDipMap[d.ID_Dipendente].costo+=costo;
 
-      // RICAVO
-      if(!ricavoPerReparto[rep])ricavoPerReparto[rep]={ricavo:0};
-      if(rep==4 && te){
-        // Economia: ore × tariffe vendita al cliente
-        const ric=tip.ord*(te.TariffaOrdinaria||0)+tip.notte*(te.TariffaNotturna||0)+tip.fest*(te.TariffaFestiva||0)+tip.notteFest*(te.TariffaNotteFestiva||0);
-        ricavoPerReparto[rep].ricavo+=ric;
+    // RICAVO ECONOMIA (rep 4 = Economia)
+    if(mov.NomeReparto==='Economia'){
+      const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=turno.DataInizio&&(!x.DataFine||x.DataFine>=turno.DataInizio)).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
+      if(te){
+        const ric=oreOrd*(te.TariffaOrdinaria||0)+oreN*(te.TariffaNotturna||0)+oreF*(te.TariffaFestiva||0)+oreNF*(te.TariffaNotteFestiva||0);
+        if(!ricavoPerReparto[repId])ricavoPerReparto[repId]={ricavo:0};
+        ricavoPerReparto[repId].ricavo+=ric;
         ricavoTotale+=ric;
       }
-    });
+    }
   });
 
   // RICAVO PRODUZIONE (reparti non-economia)
@@ -996,23 +1003,24 @@ async function caricaReport(){
   });
 
   const margineOperativo=ricavoTotale-costoTotale-costoMezziTot;
-  const totOre=Object.values(costoPerReparto).reduce((a,v)=>a+v.ore,0);
+  const totOre=(movimenti||[]).reduce((a,m)=>a+(m.OreTotali||0),0);
 
   // PRODUTTIVITA' att.15
   const totColliAtt15=(prodOp||[]).reduce((a,p)=>a+p.Colli,0);
-  const oreAtt15=batsAll.filter(b=>b.ID_Attivita==15&&(!frep||b.ID_Reparto==frep)).reduce((a,b)=>a+b.OreBattezzate,0);
+  const oreAtt15=(movimenti||[]).filter(m=>m.NomeAttivita&&m.NomeAttivita.includes('Picking')||m.NomeReparto==='Ortofrutta').reduce((a,m)=>a+(m.OreTotali||0),0);
   const produttivita=oreAtt15>0?Math.round(totColliAtt15/oreAtt15):0;
 
   // =============================================================
   // TABELLE
   // =============================================================
   const righeContoEco=Object.keys({...costoPerReparto,...ricavoPerReparto}).filter((v,i,a)=>a.indexOf(v)===i).sort().map(rep=>{
-    const c=costoPerReparto[rep]||{costo:0,ore:0,oreNotte:0,oreFest:0};
+    const c=costoPerReparto[rep]||{costo:0,ore:0,oreNotte:0,oreFest:0,nomeRep:''};
     const r=ricavoPerReparto[rep]||{ricavo:0};
     const cm=costoMezziPerRep[rep]||0;
     const margRep=r.ricavo-c.costo-cm;
+    const nomeRepLabel=c.nomeRep||nomeRep(rep);
     return `<tr>
-      <td><span class="pill py">${nomeRep(rep)}</span></td>
+      <td><span class="pill py">${nomeRepLabel}</span></td>
       <td>${fmtN(c.ore,2)}h</td>
       <td>${fmtN(c.oreNotte,2)}h</td>
       <td>${fmtN(c.oreFest,2)}h</td>
@@ -1023,30 +1031,7 @@ async function caricaReport(){
     </tr>`;
   }).join('')||'<tr><td colspan="8" class="empty">Nessun dato</td></tr>';
 
-  // Dettaglio costo per dipendente nel reparto filtrato
-  const costoPerDip={};
-  (ggs||[]).forEach(turno=>{
-    const bats=batsByTurno[turno.ID_Turno]||[];
-    const d=_dips.find(x=>x.ID_Dipendente==turno.ID_Dipendente);
-    if(!d)return;
-    const lv=_livelli.filter(x=>x.ID_Livello==d.ID_Livello&&(!x.DataFine||x.DataFine>=turno.DataInizio)&&(!x.DataInizio||x.DataInizio<=turno.DataInizio)).sort((a,b)=>(b.DataInizio||'').localeCompare(a.DataInizio||''))[0]||_livelli.find(x=>x.ID_Livello==d.ID_Livello);
-    const contDip=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
-    const costoBase=lv?.CostoOrarioBase||0;
-    const maggiorN=contDip?.MaggiorazioneNotturno||0;
-    const maggiorF=contDip?.MaggiorazioneFestivo||0;
-    const maggiorNF=contDip?.MaggiorazioneNotteFestivo||0;
-    bats.forEach((bat,idx)=>{
-      if(frep && bat.ID_Reparto!=frep)return;
-      const tip=calcolaOreBattesimoPerTipologia(turno,batsByTurno[turno.ID_Turno],idx,turno.DataInizio);
-      const costo=tip.ord*costoBase+tip.notte*costoBase*(1+maggiorN)+tip.fest*costoBase*(1+maggiorF)+tip.notteFest*costoBase*(1+maggiorNF);
-      if(!costoPerDip[d.ID_Dipendente])costoPerDip[d.ID_Dipendente]={nome:d.Nome,ore:0,oreNotte:0,oreFest:0,costo:0};
-      costoPerDip[d.ID_Dipendente].ore+=bat.OreBattezzate||0;
-      costoPerDip[d.ID_Dipendente].oreNotte+=tip.notte;
-      costoPerDip[d.ID_Dipendente].oreFest+=tip.fest;
-      costoPerDip[d.ID_Dipendente].costo+=costo;
-    });
-  });
-  const righeDip=Object.values(costoPerDip).sort((a,b)=>b.ore-a.ore).map(v=>`<tr>
+  const righeDip=Object.values(costoPerDipMap).sort((a,b)=>b.ore-a.ore).map(v=>`<tr>
     <td>${v.nome}</td>
     <td><strong>${fmtN(v.ore,2)}h</strong></td>
     <td>${fmtN(v.oreNotte,2)}h</td>
