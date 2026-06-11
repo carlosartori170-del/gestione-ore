@@ -851,15 +851,50 @@ async function caricaReport(){
     costoTotale+=oreOrd*costoBase + oreN*costoBase*(1+maggiorN) + oreF*costoBase*(1+maggiorF) + oreNF*costoBase*(1+maggiorNF);
   });
 
-  // FATTURATO PRODUZIONE
-  let fatturato=0;
+  // FATTURATO PRODUZIONE (reparti non-economia)
+  let fattProduzione=0;
   (prods||[]).forEach(p=>{
     const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
     if(!t||!t.length)return;
-    // scegli tariffa in base a turno
     const tf=t.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t.find(x=>x.TipoTurno==='Tutti')||t[0];
-    if(tf)fatturato+=p.Quantita*tf.Tariffa;
+    if(tf)fattProduzione+=p.Quantita*tf.Tariffa;
   });
+
+  // RICAVI ECONOMIA (reparto 4)
+  // Fatturato al cliente = ore battezzate rep.4 × tariffe economia (prezzi di vendita)
+  // Nota: il costo del dipendente è già in costoTotale (tariffa contratto dipendente)
+  // Le tariffe economia sono prezzi di vendita al cliente, diversi e più alti del costo
+  let fattEconomia=0;
+  const batsEco=bats.filter(b=>b.ID_Reparto==4);
+  batsEco.forEach(b=>{
+    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+    if(!g)return;
+    const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
+    if(!d)return;
+    // tariffa economia valida alla data del turno per il contratto del dipendente
+    const te=tariffeEco?.filter(x=>
+      x.ID_Contratto==d.ID_Contratto &&
+      x.DataInizio<=g.DataInizio &&
+      (!x.DataFine||x.DataFine>=g.DataInizio)
+    ).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
+    if(!te)return;
+    // ore notturne dal battesimo (dati precisi da Access) o proporzionate dal turno
+    const totOreTurno=Math.max(1,(g.Ore_A||0)+(g.Ore_B||0));
+    const ratio=b.OreBattezzate/totOreTurno;
+    const oreNBatt=b.OreNotturne||0;  // ore notturne precise dal battesimo
+    const oreFBatt=((g.OreFestive_A||0)+(g.OreFestive_B||0))*ratio;
+    const oreNFBatt=((g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0))*ratio;
+    // ore ordinarie = totale battezzate - notturne - festive - notte festive
+    const oreOrdBatt=Math.max(0,b.OreBattezzate-oreNBatt-oreFBatt-oreNFBatt);
+    // ricavo = ore ordinarie × TariffaOrdinaria + ore notte × TariffaNotturna + ...
+    fattEconomia+=
+      oreOrdBatt*(te.TariffaOrdinaria||0)+
+      oreNBatt*(te.TariffaNotturna||0)+
+      oreFBatt*(te.TariffaFestiva||0)+
+      oreNFBatt*(te.TariffaNotteFestiva||0);
+  });
+
+  const fatturato=fattProduzione+fattEconomia;
 
   // PRODUTTIVITA' ORE ATTIVITA' 15
   const totColliAtt15=(prodOp||[]).reduce((a,p)=>a+p.Colli,0);
@@ -909,12 +944,16 @@ async function caricaReport(){
     </tr>`).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
 
   // TABELLA ORE PER REPARTO
+  // Ricavo economia per reparto 4 — tariffe di vendita al cliente
+  // Costo dipendente già calcolato in costoTotale (separato)
+  // Qui calcoliamo solo il fatturato economia (ricavo)
   const righeOrePerRep=Object.entries(orePerRep).sort((a,b)=>b[1].ore-a[1].ore).map(([idRep,v])=>`
     <tr>
       <td><span class="pill py">${nomeRep(idRep)}</span></td>
       <td><strong>${fmtN(v.ore)}h</strong></td>
       <td>${fmtN(v.oreNotte)}h</td>
-    </tr>`).join('')||'<tr><td colspan="3" class="empty">Nessun dato</td></tr>';
+      <td>${idRep==4?'<strong>'+fmtEuro(fattEconomia)+'</strong>':'—'}</td>
+    </tr>`).join('')||'<tr><td colspan="4" class="empty">Nessun dato</td></tr>';
 
   // TABELLA PRODUZIONE
   const righeProds=(prods||[]).slice(0,50).map(p=>{
@@ -943,9 +982,9 @@ async function caricaReport(){
       <div class="rc-sub">Basato su tariffe contratto</div>
     </div>
     <div class="rep-card rc-green">
-      <div class="rc-title">Fatturato produzione</div>
+      <div class="rc-title">Fatturato totale</div>
       <div class="rc-val">${fmtEuro(fatturato)}</div>
-      <div class="rc-sub">${(prods||[]).length} voci produzione</div>
+      <div class="rc-sub">Produzione: ${fmtEuro(fattProduzione)} | Economia: ${fmtEuro(fattEconomia)}</div>
     </div>
     <div class="rep-card ${margine>=0?'rc-green':'rc-red'}">
       <div class="rc-title">Margine operativo</div>
@@ -970,7 +1009,7 @@ async function caricaReport(){
     <div class="card" style="margin:0;">
       <div class="ct">Ore per reparto</div>
       <div class="tw"><table>
-        <thead><tr><th>Reparto</th><th>Ore Totali</th><th>Ore Notte</th></tr></thead>
+        <thead><tr><th>Reparto</th><th>Ore Totali</th><th>Ore Notte</th><th>Ricavo</th></tr></thead>
         <tbody>${righeOrePerRep}</tbody>
       </table></div>
     </div>
