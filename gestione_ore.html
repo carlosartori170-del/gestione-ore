@@ -761,11 +761,10 @@ async function renderReport(){
   mc.innerHTML=`
   <div class="card">
     <div class="ct"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Filtri report</div>
-    <div class="g4">
+    <div class="g3">
       <div class="fg"><label>Dal</label><input id="rp-dal" type="date" value="${oggi().slice(0,7)+'-01'}"></div>
       <div class="fg"><label>Al</label><input id="rp-al" type="date" value="${oggi()}"></div>
-      <div class="fg"><label>Dipendente</label><select id="rp-dip"><option value="">Tutti</option>${optDips()}</select></div>
-      <div class="fg"><label>Reparto</label><select id="rp-rep"><option value="">Tutti</option>${optReps()}</select></div>
+      <div class="fg"><label>Reparto</label><select id="rp-rep"><option value="">Tutti i reparti</option>${optReps()}</select></div>
     </div>
     <div class="brow"><button class="btn bp" onclick="caricaReport()">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Genera report
@@ -774,189 +773,289 @@ async function renderReport(){
   <div id="report-content"><div class="empty">Seleziona il periodo e clicca "Genera report"</div></div>`;
 }
 
+// Calcola le ore per tipologia di un singolo battesimo
+// basandosi sull'orario di inizio effettivo del battesimo nella timeline del turno
+function calcolaOreBattesimoPerTipologia(turno, battesimi_turno_ordinati, idx_battesimo, data_turno){
+  // Ricostruisce la timeline: ogni battesimo occupa una fetta temporale in sequenza
+  // partendo dall'OraInizio del turno
+  const oraInizioTurno = turno.OraInizio; // "HH:MM"
+  if(!oraInizioTurno) {
+    // senza orario: usa i campi aggregati del turno per proporzione
+    return calcolaOreBattesimoProporzione(turno, battesimi_turno_ordinati[idx_battesimo]);
+  }
+
+  // Converte HH:MM in minuti da mezzanotte
+  function toMin(hhmm){ if(!hhmm)return 0; const[h,m]=(hhmm||'00:00').split(':').map(Number); return h*60+m; }
+
+  // Determina se una data è festiva (domenica o festivo italiano)
+  function isFestivo(dateStr){
+    if(!dateStr)return false;
+    const d=new Date(dateStr);
+    if(d.getDay()===0)return true; // domenica
+    const mm=String(d.getMonth()+1).padStart(2,'0');
+    const dd=String(d.getDate()).padStart(2,'0');
+    const festivi=['01-01','06-01','04-25','05-01','06-02','08-15','11-01','12-08','12-25','12-26'];
+    // Pasqua/Pasquetta approssimata - anno corrente
+    const y=d.getFullYear();
+    const pasqua=calcolaPasqua(y);
+    const pasquetta=new Date(pasqua); pasquetta.setDate(pasquetta.getDate()+1);
+    const fmtP=`${String(pasqua.getMonth()+1).padStart(2,'0')}-${String(pasqua.getDate()).padStart(2,'0')}`;
+    const fmtPL=`${String(pasquetta.getMonth()+1).padStart(2,'0')}-${String(pasquetta.getDate()).padStart(2,'0')}`;
+    return festivi.includes(`${mm}-${dd}`)||`${mm}-${dd}`===fmtP||`${mm}-${dd}`===fmtPL;
+  }
+
+  function calcolaPasqua(y){
+    const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),n=h+l-7*m+114;
+    return new Date(y,Math.floor(n/31)-1,(n%31)+1);
+  }
+
+  // Calcola minuti dall'inizio del turno per ogni battesimo
+  let curMin = toMin(oraInizioTurno);
+  const startMin = curMin;
+  let batsConOffset = battesimi_turno_ordinati.map((b,i)=>{
+    const start = curMin;
+    const durata = (b.OreBattezzate||0)*60;
+    curMin += durata;
+    return {b, start, end: curMin, durata};
+  });
+
+  const myBat = batsConOffset[idx_battesimo];
+  if(!myBat) return {ord:0,notte:0,fest:0,notteFest:0};
+
+  // Per ogni minuto del battesimo, determina la tipologia
+  // Fascia notturna: 22:00 (1320 min) → 06:00 (360 min del giorno dopo = 360+1440=1800 se notturno)
+  const NOTTE_INIZIO = 22*60; // 1320
+  const NOTTE_FINE = 6*60;    // 360
+
+  let oreOrd=0, oreNotte=0, oreFest=0, oreNotteFest=0;
+
+  // Lavora in slot da 1 minuto per precisione
+  const SLOT = 1;
+  for(let m=myBat.start; m<myBat.end; m+=SLOT){
+    const minDelGiorno = m % (24*60);
+    const giornoOffset = Math.floor(m / (24*60));
+    // data effettiva di questo minuto
+    const dataBase = new Date(data_turno+'T00:00:00');
+    dataBase.setDate(dataBase.getDate()+giornoOffset);
+    const dataStr = dataBase.toISOString().split('T')[0];
+    const festivo = isFestivo(dataStr);
+    const notturno = minDelGiorno>=NOTTE_INIZIO || minDelGiorno<NOTTE_FINE;
+    const ore = SLOT/60;
+    if(notturno && festivo) oreNotteFest+=ore;
+    else if(festivo) oreFest+=ore;
+    else if(notturno) oreNotte+=ore;
+    else oreOrd+=ore;
+  }
+  return {ord:oreOrd, notte:oreNotte, fest:oreFest, notteFest:oreNotteFest};
+}
+
+function calcolaOreBattesimoProporzione(turno, battesimo){
+  // fallback senza orario: proporziona le ore dettagliate del turno
+  const totTurno=Math.max(1,(turno.Ore_A||0)+(turno.Ore_B||0));
+  const ratio=(battesimo.OreBattezzate||0)/totTurno;
+  const oreOrdTurno=Math.max(0,totTurno-(turno.OreNotte_A||0)-(turno.OreNotte_B||0)-(turno.OreFestive_A||0)-(turno.OreFestive_B||0)-(turno.OreNotteFestive_A||0)-(turno.OreNotteFestive_B||0));
+  return {
+    ord: oreOrdTurno*ratio,
+    notte: ((turno.OreNotte_A||0)+(turno.OreNotte_B||0))*ratio,
+    fest: ((turno.OreFestive_A||0)+(turno.OreFestive_B||0))*ratio,
+    notteFest: ((turno.OreNotteFestive_A||0)+(turno.OreNotteFestive_B||0))*ratio
+  };
+}
+
 async function caricaReport(){
   const dal=document.getElementById('rp-dal').value;
   const al=document.getElementById('rp-al').value;
-  const fdip=document.getElementById('rp-dip').value;
   const frep=document.getElementById('rp-rep').value;
   const cont=document.getElementById('report-content');
   cont.innerHTML='<div class="loading">⏳ Elaborazione dati...</div>';
 
-  // Turni nel periodo
+  // Calcola numero di giorni del periodo per ripartire costi mezzi
+  const dataD=new Date(dal||'2026-01-01');
+  const dataA=new Date(al||oggi());
+  const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
+
+  // Carica tutti i turni del periodo
   let qgg=sb.from('TurniGiornalieri').select('*');
   if(dal)qgg=qgg.gte('DataInizio',dal);
   if(al)qgg=qgg.lte('DataInizio',al);
-  if(fdip)qgg=qgg.eq('ID_Dipendente',fdip);
   const{data:ggs}=await qgg;
-
   const idTurni=(ggs||[]).map(g=>g.ID_Turno);
-  let bats=[];
+
+  // Carica TUTTI i battesimi dei turni (senza filtro reparto — serve per timeline)
+  let batsAll=[];
   if(idTurni.length){
-    let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni);
-    if(frep)qb=qb.eq('ID_Reparto',frep);
-    const{data:b}=await qb;
-    bats=b||[];
+    const{data:b}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni).order('ID_Turno').order('OrdineRiga');
+    batsAll=b||[];
   }
 
-  // Produzione reparti nel periodo
+  // Tariffe
+  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
+  const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
+  const{data:costiMezzi}=await sb.from('CostiMezziReparti').select('*');
+
+  // Produzione reparti
   let qpr=sb.from('ProduzioneReparti').select('*');
   if(dal)qpr=qpr.gte('DataProduzione',dal);
   if(al)qpr=qpr.lte('DataProduzione',al);
   if(frep)qpr=qpr.eq('ID_Reparto',frep);
   const{data:prods}=await qpr;
 
-  // Produzione operatori + calcolo produttività att.15
+  // Produzione operatori att.15
   const{data:prodOp}=await sb.from('ProduzioneOperatori').select('*')
     .gte('DataProduzione',dal||'2020-01-01')
     .lte('DataProduzione',al||oggi())
     .eq('ID_Attivita',15);
 
-  // Tariffe produzione
-  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
-  const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
-
-  // CALCOLI ORE — usa i campi dettagliati da Access
-  const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
-  const totOreNotte=(ggs||[]).reduce((a,g)=>a+(g.OreNotte_A||0)+(g.OreNotte_B||0),0);
-  const totOreFestive=(ggs||[]).reduce((a,g)=>a+(g.OreFestive_A||0)+(g.OreFestive_B||0),0);
-  const totOreNotteFestive=(ggs||[]).reduce((a,g)=>a+(g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0),0);
-  const totOreOrdinarie=Math.max(0,totOre-totOreNotte-totOreFestive-totOreNotteFestive);
-
-  // Ore per reparto con dettaglio notturne
-  const orePerRep={};
-  bats.forEach(b=>{
-    const k=b.ID_Reparto;
-    if(!orePerRep[k])orePerRep[k]={ore:0,oreNotte:0};
-    orePerRep[k].ore+=b.OreBattezzate;
-    orePerRep[k].oreNotte+=(b.OreNotturne||0);
+  // =============================================================
+  // CALCOLO COSTO E RICAVO PER BATTESIMO (logica cronologica)
+  // =============================================================
+  // Raggruppa battesimi per turno in ordine
+  const batsByTurno={};
+  batsAll.forEach(b=>{
+    if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];
+    batsByTurno[b.ID_Turno].push(b);
   });
+  // Ordina per OrdineRiga
+  Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
 
-  // COSTO LAVORO — calcolo preciso con 4 tipologie di ore
-  let costoTotale=0;
-  (ggs||[]).forEach(g=>{
-    const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
+  // Per ogni battesimo calcola ore per tipologia e costo/ricavo
+  const costoPerReparto={};  // {id_rep: {costo, ore, oreNotte, oreFest}}
+  const ricavoPerReparto={};
+  let costoTotale=0, ricavoTotale=0;
+
+  (ggs||[]).forEach(turno=>{
+    const bats=batsByTurno[turno.ID_Turno]||[];
+    if(!bats.length)return;
+    const d=_dips.find(x=>x.ID_Dipendente==turno.ID_Dipendente);
     if(!d)return;
-    const lv=_livelli.filter(x=>x.ID_Livello==d.ID_Livello&&(!x.DataFine||x.DataFine>=g.DataInizio)&&(!x.DataInizio||x.DataInizio<=g.DataInizio)).sort((a,b)=>(b.DataInizio||'').localeCompare(a.DataInizio||''))[0]||_livelli.find(x=>x.ID_Livello==d.ID_Livello);
-    const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=g.DataInizio&&(!x.DataFine||x.DataFine>=g.DataInizio)).sort((a,b)=>b.DataInizio.localeCompare(a.DataInizio))[0];
-    const costoBase=lv?.CostoOrarioBase||te?.TariffaOrdinaria||0;
-    const cont=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
-    const maggiorN=cont?.MaggiorazioneNotturno||0;
-    const maggiorF=cont?.MaggiorazioneFestivo||0;
-    const maggiorNF=cont?.MaggiorazioneNotteFestivo||0;
-    // Ore ordinarie = totale - notturne - festive - nottefestive
-    const oreOrd=Math.max(0,(g.Ore_A||0)+(g.Ore_B||0)-(g.OreNotte_A||0)-(g.OreNotte_B||0)-(g.OreFestive_A||0)-(g.OreFestive_B||0)-(g.OreNotteFestive_A||0)-(g.OreNotteFestive_B||0));
-    const oreN=(g.OreNotte_A||0)+(g.OreNotte_B||0);
-    const oreF=(g.OreFestive_A||0)+(g.OreFestive_B||0);
-    const oreNF=(g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0);
-    costoTotale+=oreOrd*costoBase + oreN*costoBase*(1+maggiorN) + oreF*costoBase*(1+maggiorF) + oreNF*costoBase*(1+maggiorNF);
+    // Tariffa costo dipendente
+    const lv=_livelli.filter(x=>x.ID_Livello==d.ID_Livello&&(!x.DataFine||x.DataFine>=turno.DataInizio)&&(!x.DataInizio||x.DataInizio<=turno.DataInizio)).sort((a,b)=>(b.DataInizio||'').localeCompare(a.DataInizio||''))[0]||_livelli.find(x=>x.ID_Livello==d.ID_Livello);
+    const contDip=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
+    const costoBase=lv?.CostoOrarioBase||0;
+    const maggiorN=contDip?.MaggiorazioneNotturno||0;
+    const maggiorF=contDip?.MaggiorazioneFestivo||0;
+    const maggiorNF=contDip?.MaggiorazioneNotteFestivo||0;
+    // Tariffa ricavo economia
+    const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=turno.DataInizio&&(!x.DataFine||x.DataFine>=turno.DataInizio)).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
+
+    bats.forEach((bat,idx)=>{
+      const rep=bat.ID_Reparto;
+      // Salta se filtro reparto attivo e non corrisponde
+      if(frep && rep!=frep) return;
+
+      // Calcola ore per tipologia usando timeline cronologica
+      const tip=calcolaOreBattesimoPerTipologia(turno, batsByTurno[turno.ID_Turno], idx, turno.DataInizio);
+
+      // COSTO (tariffa contratto dipendente)
+      const costo=tip.ord*costoBase + tip.notte*costoBase*(1+maggiorN) + tip.fest*costoBase*(1+maggiorF) + tip.notteFest*costoBase*(1+maggiorNF);
+      costoTotale+=costo;
+      if(!costoPerReparto[rep])costoPerReparto[rep]={costo:0,ore:0,oreNotte:0,oreFest:0,oreNotteFest:0};
+      costoPerReparto[rep].costo+=costo;
+      costoPerReparto[rep].ore+=bat.OreBattezzate||0;
+      costoPerReparto[rep].oreNotte+=tip.notte;
+      costoPerReparto[rep].oreFest+=tip.fest;
+      costoPerReparto[rep].oreNotteFest+=tip.notteFest;
+
+      // RICAVO
+      if(!ricavoPerReparto[rep])ricavoPerReparto[rep]={ricavo:0};
+      if(rep==4 && te){
+        // Economia: ore × tariffe vendita al cliente
+        const ric=tip.ord*(te.TariffaOrdinaria||0)+tip.notte*(te.TariffaNotturna||0)+tip.fest*(te.TariffaFestiva||0)+tip.notteFest*(te.TariffaNotteFestiva||0);
+        ricavoPerReparto[rep].ricavo+=ric;
+        ricavoTotale+=ric;
+      }
+    });
   });
 
-  // FATTURATO PRODUZIONE (reparti non-economia)
+  // RICAVO PRODUZIONE (reparti non-economia)
   let fattProduzione=0;
   (prods||[]).forEach(p=>{
     const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
     if(!t||!t.length)return;
     const tf=t.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t.find(x=>x.TipoTurno==='Tutti')||t[0];
-    if(tf)fattProduzione+=p.Quantita*tf.Tariffa;
+    if(!tf)return;
+    const val=p.Quantita*tf.Tariffa;
+    fattProduzione+=val;
+    if(!ricavoPerReparto[p.ID_Reparto])ricavoPerReparto[p.ID_Reparto]={ricavo:0};
+    ricavoPerReparto[p.ID_Reparto].ricavo+=val;
+  });
+  ricavoTotale+=fattProduzione;
+
+  // COSTO MEZZI ripartito sui giorni selezionati
+  let costoMezziTot=0;
+  const costoMezziPerRep={};
+  (costiMezzi||[]).forEach(cm=>{
+    if(frep && cm.ID_Reparto!=frep)return;
+    if(cm.DataFine && cm.DataFine<dal)return;
+    if(cm.DataInizio && cm.DataInizio>al)return;
+    const costoGiornaliero=cm.CostoGiornaliero||0;
+    const costoRipartito=costoGiornaliero*numGiorni;
+    costoMezziTot+=costoRipartito;
+    if(!costoMezziPerRep[cm.ID_Reparto])costoMezziPerRep[cm.ID_Reparto]=0;
+    costoMezziPerRep[cm.ID_Reparto]+=costoRipartito;
   });
 
-  // RICAVI ECONOMIA (reparto 4)
-  // Fatturato al cliente = ore battezzate rep.4 × tariffe economia (prezzi di vendita)
-  // Nota: il costo del dipendente è già in costoTotale (tariffa contratto dipendente)
-  // Le tariffe economia sono prezzi di vendita al cliente, diversi e più alti del costo
-  let fattEconomia=0;
-  const batsEco=bats.filter(b=>b.ID_Reparto==4);
-  batsEco.forEach(b=>{
-    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
-    if(!g)return;
-    const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
-    if(!d)return;
-    // tariffa economia valida alla data del turno per il contratto del dipendente
-    const te=tariffeEco?.filter(x=>
-      x.ID_Contratto==d.ID_Contratto &&
-      x.DataInizio<=g.DataInizio &&
-      (!x.DataFine||x.DataFine>=g.DataInizio)
-    ).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
-    if(!te)return;
-    // ore notturne dal battesimo (dati precisi da Access) o proporzionate dal turno
-    const totOreTurno=Math.max(1,(g.Ore_A||0)+(g.Ore_B||0));
-    const ratio=b.OreBattezzate/totOreTurno;
-    const oreNBatt=b.OreNotturne||0;  // ore notturne precise dal battesimo
-    const oreFBatt=((g.OreFestive_A||0)+(g.OreFestive_B||0))*ratio;
-    const oreNFBatt=((g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0))*ratio;
-    // ore ordinarie = totale battezzate - notturne - festive - notte festive
-    const oreOrdBatt=Math.max(0,b.OreBattezzate-oreNBatt-oreFBatt-oreNFBatt);
-    // ricavo = ore ordinarie × TariffaOrdinaria + ore notte × TariffaNotturna + ...
-    fattEconomia+=
-      oreOrdBatt*(te.TariffaOrdinaria||0)+
-      oreNBatt*(te.TariffaNotturna||0)+
-      oreFBatt*(te.TariffaFestiva||0)+
-      oreNFBatt*(te.TariffaNotteFestiva||0);
-  });
+  const margineOperativo=ricavoTotale-costoTotale-costoMezziTot;
+  const totOre=Object.values(costoPerReparto).reduce((a,v)=>a+v.ore,0);
 
-  const fatturato=fattProduzione+fattEconomia;
-
-  // PRODUTTIVITA' ORE ATTIVITA' 15
+  // PRODUTTIVITA' att.15
   const totColliAtt15=(prodOp||[]).reduce((a,p)=>a+p.Colli,0);
-  const oreAtt15=bats.filter(b=>b.ID_Attivita==15).reduce((a,b)=>a+b.OreBattezzate,0);
+  const oreAtt15=batsAll.filter(b=>b.ID_Attivita==15&&(!frep||b.ID_Reparto==frep)).reduce((a,b)=>a+b.OreBattezzate,0);
   const produttivita=oreAtt15>0?Math.round(totColliAtt15/oreAtt15):0;
 
-  const margine=fatturato-costoTotale;
+  // =============================================================
+  // TABELLE
+  // =============================================================
+  const righeContoEco=Object.keys({...costoPerReparto,...ricavoPerReparto}).filter((v,i,a)=>a.indexOf(v)===i).sort().map(rep=>{
+    const c=costoPerReparto[rep]||{costo:0,ore:0,oreNotte:0,oreFest:0};
+    const r=ricavoPerReparto[rep]||{ricavo:0};
+    const cm=costoMezziPerRep[rep]||0;
+    const margRep=r.ricavo-c.costo-cm;
+    return `<tr>
+      <td><span class="pill py">${nomeRep(rep)}</span></td>
+      <td>${fmtN(c.ore,2)}h</td>
+      <td>${fmtN(c.oreNotte,2)}h</td>
+      <td>${fmtN(c.oreFest,2)}h</td>
+      <td>${fmtEuro(c.costo)}</td>
+      <td>${fmtEuro(r.ricavo)}</td>
+      <td>${fmtEuro(cm)}</td>
+      <td><strong class="${margRep>=0?'cg':'cr'}">${fmtEuro(margRep)}</strong></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" class="empty">Nessun dato</td></tr>';
 
-  // TABELLA ORE PER DIPENDENTE
-  const orePerDip={};
-  (ggs||[]).forEach(g=>{
-    if(!orePerDip[g.ID_Dipendente])orePerDip[g.ID_Dipendente]={ore:0,oreN:0,costo:0};
-    orePerDip[g.ID_Dipendente].ore+=g.Ore_A+g.Ore_B;
-    orePerDip[g.ID_Dipendente].oreN+=g.Ore_B||0;
-    const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
-    if(d){
-      const lv=_livelli.filter(x=>x.ID_Livello==d.ID_Livello&&(!x.DataFine||x.DataFine>=g.DataInizio)&&(!x.DataInizio||x.DataInizio<=g.DataInizio)).sort((a,b)=>(b.DataInizio||'').localeCompare(a.DataInizio||''))[0]||_livelli.find(x=>x.ID_Livello==d.ID_Livello);
-      const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=g.DataInizio&&(!x.DataFine||x.DataFine>=g.DataInizio)).sort((a,b)=>b.DataInizio.localeCompare(a.DataInizio))[0];
-      const costoBase=lv?.CostoOrarioBase||te?.TariffaOrdinaria||0;
-      const cont=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
-      const maggiorN=cont?.MaggiorazioneNotturno||0;
-      const maggiorF=cont?.MaggiorazioneFestivo||0;
-      const maggiorNF=cont?.MaggiorazioneNotteFestivo||0;
-      const oreOrd=Math.max(0,(g.Ore_A||0)+(g.Ore_B||0)-(g.OreNotte_A||0)-(g.OreNotte_B||0)-(g.OreFestive_A||0)-(g.OreFestive_B||0)-(g.OreNotteFestive_A||0)-(g.OreNotteFestive_B||0));
-      const oreN=(g.OreNotte_A||0)+(g.OreNotte_B||0);
-      const oreF=(g.OreFestive_A||0)+(g.OreFestive_B||0);
-      const oreNF=(g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0);
-      orePerDip[g.ID_Dipendente].costo+=oreOrd*costoBase+oreN*costoBase*(1+maggiorN)+oreF*costoBase*(1+maggiorF)+oreNF*costoBase*(1+maggiorNF);
-    }
+  // Dettaglio costo per dipendente nel reparto filtrato
+  const costoPerDip={};
+  (ggs||[]).forEach(turno=>{
+    const bats=batsByTurno[turno.ID_Turno]||[];
+    const d=_dips.find(x=>x.ID_Dipendente==turno.ID_Dipendente);
+    if(!d)return;
+    const lv=_livelli.filter(x=>x.ID_Livello==d.ID_Livello&&(!x.DataFine||x.DataFine>=turno.DataInizio)&&(!x.DataInizio||x.DataInizio<=turno.DataInizio)).sort((a,b)=>(b.DataInizio||'').localeCompare(a.DataInizio||''))[0]||_livelli.find(x=>x.ID_Livello==d.ID_Livello);
+    const contDip=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
+    const costoBase=lv?.CostoOrarioBase||0;
+    const maggiorN=contDip?.MaggiorazioneNotturno||0;
+    const maggiorF=contDip?.MaggiorazioneFestivo||0;
+    const maggiorNF=contDip?.MaggiorazioneNotteFestivo||0;
+    bats.forEach((bat,idx)=>{
+      if(frep && bat.ID_Reparto!=frep)return;
+      const tip=calcolaOreBattesimoPerTipologia(turno,batsByTurno[turno.ID_Turno],idx,turno.DataInizio);
+      const costo=tip.ord*costoBase+tip.notte*costoBase*(1+maggiorN)+tip.fest*costoBase*(1+maggiorF)+tip.notteFest*costoBase*(1+maggiorNF);
+      if(!costoPerDip[d.ID_Dipendente])costoPerDip[d.ID_Dipendente]={nome:d.Nome,ore:0,oreNotte:0,oreFest:0,costo:0};
+      costoPerDip[d.ID_Dipendente].ore+=bat.OreBattezzate||0;
+      costoPerDip[d.ID_Dipendente].oreNotte+=tip.notte;
+      costoPerDip[d.ID_Dipendente].oreFest+=tip.fest;
+      costoPerDip[d.ID_Dipendente].costo+=costo;
+    });
   });
+  const righeDip=Object.values(costoPerDip).sort((a,b)=>b.ore-a.ore).map(v=>`<tr>
+    <td>${v.nome}</td>
+    <td><strong>${fmtN(v.ore,2)}h</strong></td>
+    <td>${fmtN(v.oreNotte,2)}h</td>
+    <td>${fmtN(v.oreFest,2)}h</td>
+    <td>${fmtEuro(v.costo)}</td>
+  </tr>`).join('')||'<tr><td colspan="5" class="empty">Nessun dato</td></tr>';
 
-  // Aggiunge ore notturne/festive per dipendente
-  (ggs||[]).forEach(g=>{
-    if(!orePerDip[g.ID_Dipendente]) return;
-    orePerDip[g.ID_Dipendente].oreNotte=((orePerDip[g.ID_Dipendente].oreNotte||0)+(g.OreNotte_A||0)+(g.OreNotte_B||0));
-    orePerDip[g.ID_Dipendente].oreFestive=((orePerDip[g.ID_Dipendente].oreFestive||0)+(g.OreFestive_A||0)+(g.OreFestive_B||0));
-  });
-
-  const righeOrePerDip=Object.entries(orePerDip).sort((a,b)=>b[1].ore-a[1].ore).map(([idDip,v])=>`
-    <tr>
-      <td><span class="bid">${idDip}</span></td>
-      <td>${nomeDip(idDip)}</td>
-      <td><strong>${fmtN(v.ore)}h</strong></td>
-      <td>${fmtN(v.oreNotte||0)}h</td>
-      <td>${fmtN(v.oreFestive||0)}h</td>
-      <td>${fmtEuro(v.costo)}</td>
-    </tr>`).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
-
-  // TABELLA ORE PER REPARTO
-  // Ricavo economia per reparto 4 — tariffe di vendita al cliente
-  // Costo dipendente già calcolato in costoTotale (separato)
-  // Qui calcoliamo solo il fatturato economia (ricavo)
-  const righeOrePerRep=Object.entries(orePerRep).sort((a,b)=>b[1].ore-a[1].ore).map(([idRep,v])=>`
-    <tr>
-      <td><span class="pill py">${nomeRep(idRep)}</span></td>
-      <td><strong>${fmtN(v.ore)}h</strong></td>
-      <td>${fmtN(v.oreNotte)}h</td>
-      <td>${idRep==4?'<strong>'+fmtEuro(fattEconomia)+'</strong>':'—'}</td>
-    </tr>`).join('')||'<tr><td colspan="4" class="empty">Nessun dato</td></tr>';
-
-  // TABELLA PRODUZIONE
-  const righeProds=(prods||[]).slice(0,50).map(p=>{
+  // Dettaglio produzione
+  const righeProds=(prods||[]).slice(0,60).map(p=>{
     const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
     const tf=t?.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t?.find(x=>x.TipoTurno==='Tutti');
     const val=tf?p.Quantita*tf.Tariffa:0;
@@ -964,57 +1063,79 @@ async function caricaReport(){
       <td>${p.DataProduzione}</td>
       <td><span class="pill py">${nomeRep(p.ID_Reparto)}</span></td>
       <td>${nomeTipoProd(p.ID_TipoProduzione)}</td>
-      <td>${p.Quantita}</td>
+      <td>${fmtN(p.Quantita,0)}</td>
       <td>${p.Notturno?'<span class="pill pv">Notte</span>':'<span class="pill pb">Giorno</span>'}</td>
       <td>${fmtEuro(val)}</td>
-    </tr>`;}).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
 
   cont.innerHTML=`
+  <!-- SOMMARIO CONTO ECONOMICO -->
   <div class="rep-grid">
     <div class="rep-card rc-blue">
-      <div class="rc-title">Ore totali lavorate</div>
+      <div class="rc-title">Ore lavorate${frep?' — '+nomeRep(frep):''}</div>
       <div class="rc-val">${fmtN(totOre,1)}h</div>
-      <div class="rc-sub">Notte: ${fmtN(totOreNotte,1)}h | Festive: ${fmtN(totOreFestive,1)}h | Notte Fest.: ${fmtN(totOreNotteFestive,1)}h</div>
+      <div class="rc-sub">Periodo: ${numGiorni} giorni</div>
     </div>
     <div class="rep-card rc-orange">
-      <div class="rc-title">Costo lavoro stimato</div>
+      <div class="rc-title">Costo lavoro</div>
       <div class="rc-val">${fmtEuro(costoTotale)}</div>
-      <div class="rc-sub">Basato su tariffe contratto</div>
+      <div class="rc-sub">Tariffe contratto dipendente</div>
     </div>
     <div class="rep-card rc-green">
-      <div class="rc-title">Fatturato totale</div>
-      <div class="rc-val">${fmtEuro(fatturato)}</div>
-      <div class="rc-sub">Produzione: ${fmtEuro(fattProduzione)} | Economia: ${fmtEuro(fattEconomia)}</div>
+      <div class="rc-title">Ricavi</div>
+      <div class="rc-val">${fmtEuro(ricavoTotale)}</div>
+      <div class="rc-sub">Prod.: ${fmtEuro(fattProduzione)} | Eco.: ${fmtEuro(ricavoTotale-fattProduzione)}</div>
     </div>
-    <div class="rep-card ${margine>=0?'rc-green':'rc-red'}">
+    <div class="rep-card rc-orange">
+      <div class="rc-title">Costo mezzi</div>
+      <div class="rc-val">${fmtEuro(costoMezziTot)}</div>
+      <div class="rc-sub">${numGiorni} gg × tariffa giornaliera</div>
+    </div>
+    <div class="rep-card ${margineOperativo>=0?'rc-green':'rc-red'}">
       <div class="rc-title">Margine operativo</div>
-      <div class="rc-val">${fmtEuro(margine)}</div>
-      <div class="rc-sub">Fatturato - Costo lavoro</div>
+      <div class="rc-val">${fmtEuro(margineOperativo)}</div>
+      <div class="rc-sub">Ricavi − Costo lavoro − Mezzi</div>
     </div>
-    <div class="rep-card rc-viola">
+    ${!frep?`<div class="rep-card rc-viola">
       <div class="rc-title">Produttività ortofrutta (att.15)</div>
       <div class="rc-val">${produttivita}</div>
-      <div class="rc-sub">Colli/ora — tot. ${totColliAtt15} colli su ${fmtN(oreAtt15,1)}h</div>
-    </div>
+      <div class="rc-sub">Colli/ora — ${fmtN(totColliAtt15,0)} colli su ${fmtN(oreAtt15,1)}h</div>
+    </div>`:''}
   </div>
 
-  <div class="g2" style="gap:14px;margin-bottom:14px;">
-    <div class="card" style="margin:0;">
-      <div class="ct">Ore per dipendente</div>
-      <div class="tw"><table>
-        <thead><tr><th>ID</th><th>Nome</th><th>Ore Totali</th><th>Ore Notte</th><th>Ore Festive</th><th>Costo Stimato</th></tr></thead>
-        <tbody>${righeOrePerDip}</tbody>
-      </table></div>
-    </div>
-    <div class="card" style="margin:0;">
-      <div class="ct">Ore per reparto</div>
-      <div class="tw"><table>
-        <thead><tr><th>Reparto</th><th>Ore Totali</th><th>Ore Notte</th><th>Ricavo</th></tr></thead>
-        <tbody>${righeOrePerRep}</tbody>
-      </table></div>
-    </div>
+  <!-- CONTO ECONOMICO PER REPARTO -->
+  <div class="card">
+    <div class="ct">Conto economico per reparto</div>
+    <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:12px;">
+      Le ore e i costi sono calcolati sulle sole ore battezzate in ciascun reparto, 
+      con le fasce orarie (ordinaria/notturna/festiva) assegnate cronologicamente in base all'orario del turno.
+    </p>
+    <div class="tw"><table>
+      <thead><tr><th>Reparto</th><th>Ore tot.</th><th>Ore notte</th><th>Ore fest.</th><th>Costo lavoro</th><th>Ricavi</th><th>Costo mezzi</th><th>Margine</th></tr></thead>
+      <tbody>${righeContoEco}</tbody>
+      <tfoot><tr>
+        <td><strong>TOTALE</strong></td>
+        <td><strong>${fmtN(totOre,1)}h</strong></td>
+        <td></td><td></td>
+        <td><strong>${fmtEuro(costoTotale)}</strong></td>
+        <td><strong>${fmtEuro(ricavoTotale)}</strong></td>
+        <td><strong>${fmtEuro(costoMezziTot)}</strong></td>
+        <td><strong class="${margineOperativo>=0?'cg':'cr'}">${fmtEuro(margineOperativo)}</strong></td>
+      </tr></tfoot>
+    </table></div>
   </div>
 
+  <!-- COSTO LAVORO PER DIPENDENTE -->
+  <div class="card">
+    <div class="ct">Costo lavoro per dipendente${frep?' — '+nomeRep(frep):''}</div>
+    <div class="tw"><table>
+      <thead><tr><th>Nome</th><th>Ore tot.</th><th>Ore notte</th><th>Ore fest.</th><th>Costo</th></tr></thead>
+      <tbody>${righeDip}</tbody>
+    </table></div>
+  </div>
+
+  <!-- DETTAGLIO PRODUZIONE -->
   <div class="card">
     <div class="ct">Dettaglio produzione reparti</div>
     <div class="tw"><table>
@@ -1023,6 +1144,7 @@ async function caricaReport(){
     </table></div>
   </div>`;
 }
+
 
 // ============================================================
 // TAB: ARCHIVIO
