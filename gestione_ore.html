@@ -215,7 +215,7 @@ function calcOre(ini,fin){
   if(d<=0)d+=1440;
   return Math.round(d/60*100)/100;
 }
-function fmt€(n){return n!=null?'€'+Number(n).toFixed(2):'—';}
+function fmtEuro(n){return n!=null?'€'+Number(n).toFixed(2):'—';}
 function fmtN(n,dec=2){return n!=null?Number(n).toFixed(dec):'—';}
 
 function toast(msg,tipo='ok'){
@@ -887,7 +887,7 @@ async function caricaReport(){
       <td>${nomeDip(idDip)}</td>
       <td><strong>${fmtN(v.ore)}h</strong></td>
       <td>${fmtN(v.oreN)}h</td>
-      <td>${fmt€(v.costo)}</td>
+      <td>${fmtEuro(v.costo)}</td>
     </tr>`).join('')||'<tr><td colspan="5" class="empty">Nessun dato</td></tr>';
 
   // TABELLA ORE PER REPARTO
@@ -908,7 +908,7 @@ async function caricaReport(){
       <td>${nomeTipoProd(p.ID_TipoProduzione)}</td>
       <td>${p.Quantita}</td>
       <td>${p.Notturno?'<span class="pill pv">Notte</span>':'<span class="pill pb">Giorno</span>'}</td>
-      <td>${fmt€(val)}</td>
+      <td>${fmtEuro(val)}</td>
     </tr>`;}).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
 
   cont.innerHTML=`
@@ -920,17 +920,17 @@ async function caricaReport(){
     </div>
     <div class="rep-card rc-orange">
       <div class="rc-title">Costo lavoro stimato</div>
-      <div class="rc-val">${fmt€(costoTotale)}</div>
+      <div class="rc-val">${fmtEuro(costoTotale)}</div>
       <div class="rc-sub">Basato su tariffe contratto</div>
     </div>
     <div class="rep-card rc-green">
       <div class="rc-title">Fatturato produzione</div>
-      <div class="rc-val">${fmt€(fatturato)}</div>
+      <div class="rc-val">${fmtEuro(fatturato)}</div>
       <div class="rc-sub">${(prods||[]).length} voci produzione</div>
     </div>
     <div class="rep-card ${margine>=0?'rc-green':'rc-red'}">
       <div class="rc-title">Margine operativo</div>
-      <div class="rc-val">${fmt€(margine)}</div>
+      <div class="rc-val">${fmtEuro(margine)}</div>
       <div class="rc-sub">Fatturato - Costo lavoro</div>
     </div>
     <div class="rep-card rc-viola">
@@ -1106,15 +1106,15 @@ async function renderConfig(){
   const{data:te}=await sb.from('TariffeEconomia').select('*');
   document.getElementById('tbody-contratti').innerHTML=(te||[]).map(t=>`<tr>
     <td><span class="pill pg">${nomeCont(t.ID_Contratto)}</span></td>
-    <td>${fmt€(t.TariffaOrdinaria)}</td>
-    <td>${fmt€(t.TariffaNotturna)}</td>
-    <td>${fmt€(t.TariffaFestiva)}</td>
+    <td>${fmtEuro(t.TariffaOrdinaria)}</td>
+    <td>${fmtEuro(t.TariffaNotturna)}</td>
+    <td>${fmtEuro(t.TariffaFestiva)}</td>
   </tr>`).join('')||'<tr><td colspan="4" class="empty">Nessun dato</td></tr>';
 
   const{data:cm}=await sb.from('CostiMezziReparti').select('*');
   document.getElementById('tbody-mezzi').innerHTML=(cm||[]).map(c=>`<tr>
     <td><span class="pill py">${nomeRep(c.ID_Reparto)}</span></td>
-    <td>${fmt€(c.CostoGiornaliero)}</td>
+    <td>${fmtEuro(c.CostoGiornaliero)}</td>
     <td>${c.DataInizio||'—'}</td>
   </tr>`).join('')||'<tr><td colspan="3" class="empty">Nessun dato</td></tr>';
 }
