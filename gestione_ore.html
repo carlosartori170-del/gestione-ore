@@ -1150,9 +1150,11 @@ async function caricaReport(){
 // TAB: ARCHIVIO
 // ============================================================
 async function renderArchivio(){
-  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(200);
-  const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(500);
-  const totOre=(ggs||[]).reduce((a,g)=>a+g.Ore_A+g.Ore_B,0);
+  // Carica solo i dati per le statistiche iniziali (senza limit)
+  // I battesimi filtrati vengono caricati separatamente con filtraArchivio()
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,Ore_A,Ore_B').order('DataInizio',{ascending:false});
+  const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
+  const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(100);
 
   const righeB=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
@@ -1168,11 +1170,17 @@ async function renderArchivio(){
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
     </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun dato</td></tr>';
 
+  // Conteggi reali dal database
+  const[{count:cntTurni},{count:cntBats}]=await Promise.all([
+    sb.from('TurniGiornalieri').select('*',{count:'exact',head:true}),
+    sb.from('BattesimiTurno').select('*',{count:'exact',head:true})
+  ]);
+
   document.getElementById('mc').innerHTML=`
   <div class="stats">
     <div class="stat"><div class="n">${_dips.length}</div><div class="l">Dipendenti</div></div>
-    <div class="stat"><div class="n">${(ggs||[]).length}</div><div class="l">Turni</div></div>
-    <div class="stat"><div class="n">${(bats||[]).length}</div><div class="l">Battesimi</div></div>
+    <div class="stat"><div class="n">${cntTurni||0}</div><div class="l">Turni</div></div>
+    <div class="stat"><div class="n">${cntBats||0}</div><div class="l">Battesimi</div></div>
     <div class="stat"><div class="n">${fmtN(totOre,1)}</div><div class="l">Ore totali</div></div>
   </div>
   <div class="card">
