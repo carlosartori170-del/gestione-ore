@@ -1148,7 +1148,7 @@ async function renderArchivio(){
   // I battesimi filtrati vengono caricati separatamente con filtraArchivio()
   const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,Ore_A,Ore_B').order('DataInizio',{ascending:false});
   const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
-  const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(100);
+  const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(200);
 
   const righeB=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
