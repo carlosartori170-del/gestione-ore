@@ -1068,6 +1068,7 @@ async function filtraArch(){
 // ============================================================
 async function renderConfig(){
   const{data:utenti}=await sb.from('Utenti').select('*');
+  const{data:tuttiDips}=await sb.from('Dipendenti').select('*').order('Nome');
   document.getElementById('mc').innerHTML=`
   <div class="g2" style="gap:14px;">
     <div class="card" style="margin:0;">
@@ -1092,13 +1093,14 @@ async function renderConfig(){
     <div class="card" style="margin:0;">
       <div class="ct">Dipendenti</div>
       <div class="tw" style="max-height:300px;overflow-y:auto;"><table>
-        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>CodiceVoice</th></tr></thead>
-        <tbody>${_dips.map(d=>`<tr>
+        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>CodiceVoice</th><th>Stato</th></tr></thead>
+        <tbody>${(tuttiDips||[]).map(d=>`<tr>
           <td><span class="bid">${d.ID_Dipendente}</span></td>
           <td>${d.Nome}</td>
           <td>${nomeCont(d.ID_Contratto)}</td>
           <td>${nomeLiv(d.ID_Livello)}</td>
           <td class="mono">${d.CodiceVoice||'—'}</td>
+          <td><span class="pill ${d.Attivo?'pg':'pr'}">${d.Attivo?'Attivo':'Non attivo'}</span></td>
         </tr>`).join('')}</tbody>
       </table></div>
     </div>
