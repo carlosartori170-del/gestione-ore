@@ -242,7 +242,7 @@ async function caricaDatiBase(){
     sb.from('Attivita').select('*').order('NomeAttivita'),
     sb.from('Contratti').select('*'),
     sb.from('Livelli').select('*'),
-    sb.from('TipiProduzione').select('*').eq('Attivo',true).order('TipoProduzione')
+    sb.from('TipiProduzione').select('*').order('TipoProduzione')
   ]);
   _dips=d||[];_reparti=r||[];_attivita=a||[];
   _contratti=c||[];_livelli=l||[];_tipiProd=t||[];
@@ -835,12 +835,14 @@ async function caricaReport(){
   (ggs||[]).forEach(g=>{
     const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
     if(!d)return;
+    const lv=_livelli.find(x=>x.ID_Livello==d.ID_Livello);
     const te=tariffeEco?.find(x=>x.ID_Contratto==d.ID_Contratto);
-    if(!te)return;
+    const costoBase=lv?.CostoOrarioBase||te?.TariffaOrdinaria||0;
+    const cont=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
+    const maggiorNotte=cont?.MaggiorazioneNotturno||0;
     const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
     bGG.forEach(b=>{
-      // semplificazione: ore notturne se Ore_B>0
-      const tariffa=g.Ore_B>0?te.TariffaNotturna:te.TariffaOrdinaria;
+      const tariffa=g.Ore_B>0?costoBase*(1+maggiorNotte):costoBase;
       costoTotale+=b.OreBattezzate*(tariffa||0);
     });
   });
@@ -870,14 +872,16 @@ async function caricaReport(){
     orePerDip[g.ID_Dipendente].oreN+=g.Ore_B||0;
     const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
     if(d){
+      const lv=_livelli.find(x=>x.ID_Livello==d.ID_Livello);
       const te=tariffeEco?.find(x=>x.ID_Contratto==d.ID_Contratto);
-      if(te){
-        const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
-        bGG.forEach(b=>{
-          const tariffa=g.Ore_B>0?te.TariffaNotturna:te.TariffaOrdinaria;
-          orePerDip[g.ID_Dipendente].costo+=b.OreBattezzate*(tariffa||0);
-        });
-      }
+      const costoBase=lv?.CostoOrarioBase||te?.TariffaOrdinaria||0;
+      const cont=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
+      const maggiorNotte=cont?.MaggiorazioneNotturno||0;
+      const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
+      bGG.forEach(b=>{
+        const tariffa=g.Ore_B>0?costoBase*(1+maggiorNotte):costoBase;
+        orePerDip[g.ID_Dipendente].costo+=b.OreBattezzate*(tariffa||0);
+      });
     }
   });
 
