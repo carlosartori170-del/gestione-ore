@@ -1092,18 +1092,65 @@ async function renderConfig(){
     </div>
     <div class="card" style="margin:0;">
       <div class="ct">Dipendenti</div>
-      <div class="tw" style="max-height:300px;overflow-y:auto;"><table>
-        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>CodiceVoice</th><th>Stato</th></tr></thead>
-        <tbody>${(tuttiDips||[]).map(d=>`<tr>
+      <div class="g5" style="margin-bottom:10px;align-items:end;">
+        <div class="fg"><label>Nome</label><input id="dp-nome" type="text" placeholder="Cognome Nome"></div>
+        <div class="fg"><label>Codice Voice</label><input id="dp-voice" type="number" placeholder="es. 23001"></div>
+        <div class="fg"><label>Contratto</label>
+          <select id="dp-cont">${_contratti.map(c=>`<option value="${c.ID_Contratto}">${c.NomeContratto}</option>`).join('')}</select>
+        </div>
+        <div class="fg"><label>Livello</label>
+          <select id="dp-lv">${_livelli.filter(l=>!l.DataFine).map(l=>`<option value="${l.ID_Livello}">${nomeCont(l.ID_Contratto)} - ${l.NomeLivello}</option>`).join('')}</select>
+        </div>
+        <div class="fg"><label>Stato</label>
+          <select id="dp-attivo"><option value="true">Attivo</option><option value="false">Non attivo</option></select>
+        </div>
+      </div>
+      <button class="btn bp bsm" onclick="salvaDipendente()">+ Aggiungi dipendente</button>
+      <div class="tw" style="max-height:320px;overflow-y:auto;margin-top:14px;"><table>
+        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>Voice</th><th>Stato</th><th></th></tr></thead>
+        <tbody id="tbody-dips">${(tuttiDips||[]).map(d=>`<tr>
           <td><span class="bid">${d.ID_Dipendente}</span></td>
-          <td>${d.Nome}</td>
+          <td><strong>${d.Nome}</strong></td>
           <td>${nomeCont(d.ID_Contratto)}</td>
           <td>${nomeLiv(d.ID_Livello)}</td>
           <td class="mono">${d.CodiceVoice||'—'}</td>
           <td><span class="pill ${d.Attivo?'pg':'pr'}">${d.Attivo?'Attivo':'Non attivo'}</span></td>
+          <td style="white-space:nowrap;">
+            <button class="btn bp bsm" onclick="editDipendente(${d.ID_Dipendente})" style="margin-right:4px;">✎</button>
+            <button class="btn br bsm" onclick="toggleDipendente(${d.ID_Dipendente},${d.Attivo})">${d.Attivo?'Disattiva':'Attiva'}</button>
+          </td>
         </tr>`).join('')}</tbody>
       </table></div>
     </div>
+  </div>
+
+  <!-- REPARTI -->
+  <div class="card" style="margin-top:14px;">
+    <div class="ct">Reparti</div>
+    <div class="g3" style="margin-bottom:10px;align-items:end;">
+      <div class="fg"><label>Nome reparto</label><input id="rep-nome" type="text" placeholder="es. Surgelati"></div>
+      <div><button class="btn bp bsm" onclick="salvaReparto()">+ Aggiungi reparto</button></div>
+    </div>
+    <div class="tw" style="max-height:220px;overflow-y:auto;"><table>
+      <thead><tr><th>ID</th><th>Nome</th><th></th></tr></thead>
+      <tbody id="tbody-reparti"><tr><td colspan="3" class="loading">Caricamento...</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <!-- ATTIVITA -->
+  <div class="card" style="margin-top:14px;">
+    <div class="ct">Attività</div>
+    <div class="g3" style="margin-bottom:10px;align-items:end;">
+      <div class="fg"><label>Reparto</label>
+        <select id="att-rep"><option value="">— Seleziona —</option>${optReps()}</select>
+      </div>
+      <div class="fg"><label>Nome attività</label><input id="att-nome" type="text" placeholder="es. Picking"></div>
+      <div><button class="btn bp bsm" onclick="salvaAttivita()">+ Aggiungi attività</button></div>
+    </div>
+    <div class="tw" style="max-height:280px;overflow-y:auto;"><table>
+      <thead><tr><th>ID</th><th>Reparto</th><th>Nome</th><th></th></tr></thead>
+      <tbody id="tbody-attivita"><tr><td colspan="4" class="loading">Caricamento...</td></tr></tbody>
+    </table></div>
   </div>
 
   <!-- TARIFFE ECONOMIA -->
@@ -1190,12 +1237,37 @@ async function renderConfig(){
 }
 
 async function caricaTariffe(){
-  const[{data:te},{data:lv},{data:tp},{data:cm}]=await Promise.all([
+  const[{data:te},{data:lv},{data:tp},{data:cm},{data:reps},{data:atts}]=await Promise.all([
     sb.from('TariffeEconomia').select('*').order('DataInizio',{ascending:false}),
     sb.from('Livelli').select('*').order('ID_Contratto'),
     sb.from('TariffeProduzione').select('*').order('DataInizio',{ascending:false}),
-    sb.from('CostiMezziReparti').select('*').order('DataInizio',{ascending:false})
+    sb.from('CostiMezziReparti').select('*').order('DataInizio',{ascending:false}),
+    sb.from('Reparti').select('*').order('ID_Reparto'),
+    sb.from('Attivita').select('*').order('ID_Attivita')
   ]);
+
+  // Reparti
+  const tReps=document.getElementById('tbody-reparti');
+  if(tReps)tReps.innerHTML=(reps||[]).map(r=>`<tr>
+    <td><span class="bid">${r.ID_Reparto}</span></td>
+    <td><strong>${r.NomeReparto}</strong></td>
+    <td>
+      <button class="btn bp bsm" onclick="editReparto(${r.ID_Reparto},'${r.NomeReparto.replace(/'/g,"\'")}')" style="margin-right:4px;">✎</button>
+      <button class="btn br bsm" onclick="eliminaReparto(${r.ID_Reparto})">✕</button>
+    </td>
+  </tr>`).join('')||'<tr><td colspan="3" class="empty">Nessun reparto</td></tr>';
+
+  // Attività
+  const tAtts=document.getElementById('tbody-attivita');
+  if(tAtts)tAtts.innerHTML=(atts||[]).map(a=>`<tr>
+    <td><span class="bid">${a.ID_Attivita}</span></td>
+    <td><span class="pill py">${nomeRep(a.ID_Reparto)}</span></td>
+    <td><strong>${a.NomeAttivita}</strong></td>
+    <td>
+      <button class="btn bp bsm" onclick="editAttivita(${a.ID_Attivita},'${(a.NomeAttivita||'').replace(/'/g,"\'")}')" style="margin-right:4px;">✎</button>
+      <button class="btn br bsm" onclick="eliminaAttivita(${a.ID_Attivita})">✕</button>
+    </td>
+  </tr>`).join('')||'<tr><td colspan="4" class="empty">Nessuna attività</td></tr>';
 
   // Tariffe economia
   const tEco=document.getElementById('tbody-tariffe-eco');
@@ -1446,6 +1518,110 @@ async function exportCSV(tipo){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;a.click();
   toast('✔ Download avviato');
 }
+
+// ===== REPARTI CRUD =====
+async function salvaReparto(){
+  const nome=document.getElementById('rep-nome').value.trim();
+  if(!nome){toast('Inserisci il nome del reparto','err');return;}
+  const{error}=await sb.from('Reparti').insert({NomeReparto:nome});
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Reparto aggiunto');
+  document.getElementById('rep-nome').value='';
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+async function editReparto(id,nomeAttuale){
+  const nuovo=prompt('Nuovo nome reparto:',nomeAttuale);
+  if(!nuovo||nuovo===nomeAttuale)return;
+  const{error}=await sb.from('Reparti').update({NomeReparto:nuovo}).eq('ID_Reparto',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Reparto aggiornato');
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+async function eliminaReparto(id){
+  if(!confirm('Eliminare questo reparto? Le attività associate potrebbero non funzionare correttamente.'))return;
+  const{error}=await sb.from('Reparti').delete().eq('ID_Reparto',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Reparto eliminato');
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+// ===== ATTIVITA CRUD =====
+async function salvaAttivita(){
+  const nome=document.getElementById('att-nome').value.trim();
+  const id_rep=parseInt(document.getElementById('att-rep').value);
+  if(!nome||!id_rep){toast('Compila reparto e nome','err');return;}
+  const{error}=await sb.from('Attivita').insert({NomeAttivita:nome,ID_Reparto:id_rep});
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Attività aggiunta');
+  document.getElementById('att-nome').value='';
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+async function editAttivita(id,nomeAttuale){
+  const nuovo=prompt('Nuovo nome attività:',nomeAttuale);
+  if(!nuovo||nuovo===nomeAttuale)return;
+  const{error}=await sb.from('Attivita').update({NomeAttivita:nuovo}).eq('ID_Attivita',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Attività aggiornata');
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+async function eliminaAttivita(id){
+  if(!confirm('Eliminare questa attività?'))return;
+  const{error}=await sb.from('Attivita').delete().eq('ID_Attivita',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Attività eliminata');
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+// ===== DIPENDENTI CRUD =====
+async function salvaDipendente(){
+  const nome=document.getElementById('dp-nome').value.trim();
+  const voice=parseInt(document.getElementById('dp-voice').value);
+  const id_c=parseInt(document.getElementById('dp-cont').value);
+  const id_l=parseInt(document.getElementById('dp-lv').value);
+  const attivo=document.getElementById('dp-attivo').value==='true';
+  if(!nome||!voice){toast('Nome e CodiceVoice obbligatori','err');return;}
+  const{error}=await sb.from('Dipendenti').insert({Nome:nome,CodiceVoice:voice,ID_Contratto:id_c,ID_Livello:id_l,Attivo:attivo});
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Dipendente aggiunto');
+  document.getElementById('dp-nome').value='';
+  document.getElementById('dp-voice').value='';
+  await caricaDatiBase();
+  await renderConfig();
+}
+
+async function editDipendente(id){
+  const dip=_dips.find(d=>d.ID_Dipendente==id)||(await sb.from('Dipendenti').select('*').eq('ID_Dipendente',id).single()).data;
+  if(!dip)return;
+  const nuovoNome=prompt('Nome:',dip.Nome);
+  if(nuovoNome===null)return;
+  const nuovoVoice=prompt('Codice Voice:',dip.CodiceVoice);
+  if(nuovoVoice===null)return;
+  const{error}=await sb.from('Dipendenti').update({Nome:nuovoNome,CodiceVoice:parseInt(nuovoVoice)}).eq('ID_Dipendente',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Dipendente aggiornato');
+  await caricaDatiBase();
+  await renderConfig();
+}
+
+async function toggleDipendente(id,attuale){
+  const nuovoStato=!attuale;
+  const{error}=await sb.from('Dipendenti').update({Attivo:nuovoStato}).eq('ID_Dipendente',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast(nuovoStato?'Dipendente attivato':'Dipendente disattivato');
+  await caricaDatiBase();
+  await renderConfig();
+}
+
 </script>
 </body>
 </html>
