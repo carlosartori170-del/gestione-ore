@@ -3,114 +3,153 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestione Ore Lavoro</title>
+<title>Nexus — Gestione Ore</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14532d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --p:#14532d;--pm:#166534;--pl:#22c55e;--acc:#e8a020;
   --sfondo:#f0faf4;--bianco:#fff;--testo:#14532d;--grigio:#6b8f72;
   --bordo:#bbf7d0;--verde:#15803d;--rosso:#b83228;--arancio:#c97010;
+  --blu:#1d4ed8;--viola:#7c3aed;
   --mono:'Courier New',monospace;
+  --shadow:0 1px 4px rgba(0,0,0,0.08);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--sfondo);color:var(--testo);min-height:100vh;font-size:14px;}
 
-#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--p);}
-.lbox{background:white;border-radius:12px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.3);}
-.lbox h1{font-size:1.1rem;font-weight:800;color:var(--p);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;}
-.lbox p{font-size:0.82rem;color:var(--grigio);margin-bottom:24px;}
-.lbox .fg{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
-.lbox label{font-size:0.7rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;}
-.lbox input{border:1.5px solid var(--bordo);border-radius:5px;padding:10px 12px;font-size:0.92rem;background:var(--sfondo);}
-.lbox input:focus{outline:none;border-color:var(--pl);}
-.lbox button{width:100%;padding:11px;background:var(--p);color:white;border:none;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer;margin-top:6px;}
-#lerr{color:var(--rosso);font-size:0.82rem;font-weight:600;margin-top:10px;min-height:20px;}
+/* LOGIN */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#14532d 0%,#166534 50%,#15803d 100%);}
+.lbox{background:white;border-radius:16px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.lbox .logo{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
+.lbox .logo-icon{width:44px;height:44px;background:var(--p);border-radius:10px;display:flex;align-items:center;justify-content:center;}
+.lbox .logo-icon svg{width:24px;height:24px;fill:none;stroke:white;stroke-width:2;}
+.lbox h1{font-size:1.3rem;font-weight:800;color:var(--p);}
+.lbox .sub{font-size:0.78rem;color:var(--grigio);margin-top:2px;}
+.lbox .divider{height:1px;background:var(--bordo);margin:20px 0;}
+.lbox .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+.lbox label{font-size:0.7rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.06em;}
+.lbox input{border:1.5px solid var(--bordo);border-radius:8px;padding:11px 14px;font-size:0.92rem;background:var(--sfondo);transition:border-color 0.15s;}
+.lbox input:focus{outline:none;border-color:var(--pl);background:white;}
+.lbox .lbtn{width:100%;padding:12px;background:var(--p);color:white;border:none;border-radius:8px;font-size:0.92rem;font-weight:700;cursor:pointer;margin-top:6px;transition:background 0.15s;}
+.lbox .lbtn:hover{background:var(--pm);}
+#lerr{color:var(--rosso);font-size:0.8rem;font-weight:600;margin-top:10px;min-height:18px;}
 
+/* APP */
 #app{display:none;}
-header{background:var(--p);color:white;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,0.3);}
-header h1{font-size:1rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;}
+header{background:var(--p);color:white;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,0.3);}
+.hlogo{display:flex;align-items:center;gap:10px;}
+.hlogo-icon{width:32px;height:32px;background:rgba(255,255,255,0.15);border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.hlogo-icon svg{width:18px;height:18px;fill:none;stroke:white;stroke-width:2.2;}
+header h1{font-size:0.95rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;}
 .hright{display:flex;align-items:center;gap:10px;}
-.rbadge{font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--acc);color:var(--p);}
-.lbtn{background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 12px;border-radius:4px;font-size:0.78rem;cursor:pointer;font-weight:600;}
-.lbtn:hover{background:rgba(255,255,255,0.25);}
+.rbadge{font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--acc);color:var(--p);}
+.logoutbtn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:white;padding:5px 12px;border-radius:6px;font-size:0.76rem;cursor:pointer;font-weight:600;}
+.logoutbtn:hover{background:rgba(255,255,255,0.22);}
 
-nav{background:var(--pm);display:flex;padding:0 16px;gap:2px;flex-wrap:wrap;}
-nav button{background:none;border:none;color:rgba(255,255,255,0.55);padding:11px 14px;font-size:0.79rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;transition:color 0.12s;}
-nav button:hover{color:white;}
+nav{background:var(--pm);display:flex;padding:0 16px;overflow-x:auto;gap:0;}
+nav::-webkit-scrollbar{height:2px;}
+nav button{background:none;border:none;color:rgba(255,255,255,0.5);padding:12px 16px;font-size:0.78rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:color 0.12s;display:flex;align-items:center;gap:6px;}
+nav button svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;}
+nav button:hover{color:rgba(255,255,255,0.85);}
 nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
 
-main{padding:20px 16px;max-width:1080px;margin:0 auto;}
+main{padding:20px 16px;max-width:1100px;margin:0 auto;}
 .tab{display:none;}.tab.on{display:block;}
 
-.card{background:var(--bianco);border:1px solid var(--bordo);border-radius:8px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
-.ct{font-size:0.7rem;font-weight:800;color:var(--grigio);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--sfondo);}
+.card{background:var(--bianco);border:1px solid var(--bordo);border-radius:10px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow);}
+.ct{font-size:0.68rem;font-weight:800;color:var(--grigio);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--sfondo);display:flex;align-items:center;gap:6px;}
+.ct svg{width:14px;height:14px;fill:none;stroke:var(--grigio);stroke-width:2;}
 
 .fg{display:flex;flex-direction:column;gap:4px;}
-.fg label{font-size:0.68rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;}
-.fg input,.fg select{border:1.5px solid var(--bordo);border-radius:5px;padding:8px 10px;font-size:0.88rem;color:var(--testo);background:var(--sfondo);}
-.fg input:focus,.fg select:focus{outline:none;border-color:var(--pl);background:white;}
-.fg input[readonly]{background:#e4f5eb;cursor:default;color:var(--grigio);}
+.fg label{font-size:0.67rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;}
+.fg input,.fg select{border:1.5px solid var(--bordo);border-radius:6px;padding:8px 10px;font-size:0.88rem;color:var(--testo);background:var(--sfondo);transition:all 0.12s;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--pl);background:white;box-shadow:0 0 0 3px rgba(34,197,94,0.1);}
+.fg input[readonly]{background:#e8f5ef;cursor:default;color:var(--grigio);}
 .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
 .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
 .ga{grid-column:1/-1;}
 
-.btn{padding:8px 16px;border:none;border-radius:5px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:filter 0.12s;}
-.btn:hover{filter:brightness(0.9);}
+.btn{padding:8px 16px;border:none;border-radius:6px;font-size:0.81rem;font-weight:700;cursor:pointer;transition:all 0.12s;display:inline-flex;align-items:center;gap:5px;}
+.btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;}
+.btn:hover{filter:brightness(0.92);}
 .bp{background:var(--p);color:white;}
 .bv{background:var(--verde);color:white;}
-.br{background:var(--rosso);color:white;padding:5px 10px;font-size:0.74rem;}
+.br{background:var(--rosso);color:white;padding:5px 10px;font-size:0.73rem;}
 .ba{background:var(--acc);color:var(--p);}
 .bo{background:transparent;border:1.5px solid var(--bordo);color:var(--testo);}
 .bo:hover{border-color:var(--pl);color:var(--verde);filter:none;}
-.bsm{padding:4px 10px;font-size:0.74rem;}
+.bsm{padding:4px 10px;font-size:0.73rem;}
 .brow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;}
 
 .tw{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:0.82rem;}
-th{background:var(--sfondo);color:var(--grigio);font-size:0.66rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;text-align:left;border-bottom:2px solid var(--bordo);white-space:nowrap;}
+table{width:100%;border-collapse:collapse;font-size:0.81rem;}
+th{background:var(--sfondo);color:var(--grigio);font-size:0.64rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;padding:8px 10px;text-align:left;border-bottom:2px solid var(--bordo);white-space:nowrap;}
 td{padding:8px 10px;border-bottom:1px solid var(--bordo);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:#f0faf4;}
+tr:hover td{background:#f5fbf7;}
 
-.bid{font-family:var(--mono);font-size:0.74rem;background:var(--p);color:white;padding:2px 6px;border-radius:3px;font-weight:700;}
-.bmov{font-family:var(--mono);font-size:0.74rem;background:var(--pm);color:white;padding:2px 6px;border-radius:3px;}
-.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:700;}
+.bid{font-family:var(--mono);font-size:0.72rem;background:var(--p);color:white;padding:2px 7px;border-radius:4px;font-weight:700;}
+.bmov{font-family:var(--mono);font-size:0.72rem;background:var(--pm);color:white;padding:2px 7px;border-radius:4px;}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:0.69rem;font-weight:700;}
 .pg{background:#d3f0e3;color:var(--verde);}
 .py{background:#fdefd3;color:var(--arancio);}
-.pb{background:#dcf5e8;color:var(--verde);}
+.pb{background:#dbeafe;color:var(--blu);}
 .pr{background:#fde3e1;color:var(--rosso);}
+.pv{background:#ede9fe;color:var(--viola);}
 .po{background:#fff0d3;color:var(--arancio);}
 
-.alert{padding:9px 13px;border-radius:5px;font-size:0.82rem;font-weight:600;margin-bottom:12px;}
+.alert{padding:9px 13px;border-radius:6px;font-size:0.82rem;font-weight:600;margin-bottom:12px;}
 .aok{background:#d3f0e3;color:var(--verde);border:1px solid #a5d9be;}
 .aerr{background:#fde3e1;color:var(--rosso);border:1px solid #f4b0ab;}
 .awarn{background:#fdefd3;color:var(--arancio);border:1px solid #f5d494;}
 
-#toast{position:fixed;bottom:20px;right:20px;z-index:999;background:var(--p);color:white;padding:10px 18px;border-radius:6px;font-size:0.84rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;}
+#toast{position:fixed;bottom:20px;right:20px;z-index:999;padding:11px 18px;border-radius:8px;font-size:0.84rem;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;}
 #toast.show{opacity:1;transform:translateY(0);}
 
-.ore-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin:10px 0;background:var(--sfondo);border:1px solid var(--bordo);}
+.ore-bar{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:8px;margin:10px 0;background:var(--sfondo);border:1px solid var(--bordo);}
 .ore-bar .num{font-size:1.3rem;font-weight:800;font-family:var(--mono);}
 .num.ok{color:var(--verde);}.num.warn{color:var(--arancio);}.num.err{color:var(--rosso);}
 
-.qrow{display:grid;grid-template-columns:40px 2fr 2fr 90px 1fr 80px;gap:8px;align-items:end;padding:8px 10px;border-radius:6px;background:var(--sfondo);border:1px solid var(--bordo);margin-bottom:6px;}
+.qrow{display:grid;grid-template-columns:30px 2fr 2fr 90px 1fr 70px;gap:8px;align-items:end;padding:8px 10px;border-radius:6px;background:var(--sfondo);border:1px solid var(--bordo);margin-bottom:6px;}
 .prow{display:grid;grid-template-columns:auto 2fr 2fr 80px;gap:8px;align-items:center;padding:7px 10px;border-radius:5px;background:#fff9ec;border:1px solid #f5d494;margin-bottom:5px;font-size:0.82rem;}
 
+/* STATS */
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
-.stat{background:var(--bianco);border:1px solid var(--bordo);border-radius:7px;padding:12px;text-align:center;}
+.stat{background:var(--bianco);border:1px solid var(--bordo);border-radius:8px;padding:14px;text-align:center;}
 .stat .n{font-size:1.5rem;font-weight:900;color:var(--p);font-variant-numeric:tabular-nums;}
-.stat .l{font-size:0.66rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;margin-top:3px;}
+.stat .l{font-size:0.65rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;margin-top:3px;}
 
-.empty{text-align:center;color:var(--grigio);padding:24px;font-size:0.86rem;}
-.loading{text-align:center;color:var(--grigio);padding:16px;font-size:0.82rem;}
+/* REPORT CARDS */
+.rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:16px;}
+.rep-card{background:var(--bianco);border:1px solid var(--bordo);border-radius:10px;padding:16px;box-shadow:var(--shadow);}
+.rep-card .rc-title{font-size:0.68rem;font-weight:800;color:var(--grigio);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px;}
+.rep-card .rc-val{font-size:2rem;font-weight:900;font-variant-numeric:tabular-nums;color:var(--p);}
+.rep-card .rc-sub{font-size:0.78rem;color:var(--grigio);margin-top:4px;}
+.rc-green{border-top:3px solid var(--verde);}
+.rc-orange{border-top:3px solid var(--arancio);}
+.rc-red{border-top:3px solid var(--rosso);}
+.rc-blue{border-top:3px solid var(--blu);}
+.rc-viola{border-top:3px solid var(--viola);}
+
+.empty{text-align:center;color:var(--grigio);padding:28px;font-size:0.84rem;}
+.loading{text-align:center;color:var(--grigio);padding:20px;font-size:0.82rem;}
+
+/* UPLOAD AREA */
+.upload-area{border:2px dashed var(--bordo);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--sfondo);}
+.upload-area:hover{border-color:var(--pl);background:#f0fdf4;}
+.upload-area svg{width:32px;height:32px;stroke:var(--grigio);fill:none;stroke-width:1.5;margin-bottom:8px;}
+.upload-area p{font-size:0.84rem;color:var(--grigio);}
+.upload-area input{display:none;}
 
 @media(max-width:640px){
-  .g4,.g5{grid-template-columns:1fr 1fr;}
-  .g3{grid-template-columns:1fr 1fr;}
+  .g4,.g5,.g3{grid-template-columns:1fr 1fr;}
   .ga{grid-column:1/-1;}
-  .qrow{grid-template-columns:30px 1fr 1fr 70px;grid-template-rows:auto auto;}
+  .qrow{grid-template-columns:25px 1fr 1fr 70px;}
+  .rep-grid{grid-template-columns:1fr;}
 }
 </style>
 </head>
@@ -120,11 +159,19 @@ tr:hover td{background:#f0faf4;}
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="lbox">
-    <h1>⏱ Gestione Ore</h1>
-    <p>Accedi con le tue credenziali</p>
-    <div class="fg"><label>Username</label><input id="lu" type="text" autocomplete="username"></div>
-    <div class="fg"><label>Password</label><input id="lp" type="password" autocomplete="current-password"></div>
-    <button onclick="doLogin()">Accedi</button>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div>
+        <div class="h1" style="font-size:1.3rem;font-weight:800;color:var(--p);">Nexus</div>
+        <div class="sub">Gestione Ore & Produzione</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="fg"><label>Username</label><input id="lu" type="text" autocomplete="username" placeholder="Inserisci username"></div>
+    <div class="fg"><label>Password</label><input id="lp" type="password" autocomplete="current-password" placeholder="Inserisci password"></div>
+    <button class="lbtn" onclick="doLogin()">Accedi</button>
     <div id="lerr"></div>
   </div>
 </div>
@@ -132,10 +179,18 @@ tr:hover td{background:#f0faf4;}
 <!-- APP -->
 <div id="app">
   <header>
-    <h1>⏱ Gestione Ore Lavoro</h1>
+    <div class="hlogo">
+      <div class="hlogo-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h1>Nexus — Gestione Ore</h1>
+    </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
-      <button class="lbtn" onclick="doLogout()">Esci</button>
+      <button class="logoutbtn" onclick="doLogout()">
+        <svg style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle;" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Esci
+      </button>
     </div>
   </header>
   <nav id="mnav"></nav>
@@ -143,98 +198,77 @@ tr:hover td{background:#f0faf4;}
 </div>
 
 <script>
-// ============================================================
-// SUPABASE
-// ============================================================
-const SB_URL = 'https://eqtyfnluswalfassmlxd.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxdHlmbmx1c3dhbGZhc3NtbHhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzE4NzksImV4cCI6MjA5NjYwNzg3OX0.bkTpKYduJV_PVNxEt6xgu0dWHy8kjmkMExlhBaCZSyk';
-const sb = supabase.createClient(SB_URL, SB_KEY);
+const SB_URL='https://eqtyfnluswalfassmlxd.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxdHlmbmx1c3dhbGZhc3NtbHhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzE4NzksImV4cCI6MjA5NjYwNzg3OX0.bkTpKYduJV_PVNxEt6xgu0dWHy8kjmkMExlhBaCZSyk';
+const sb=supabase.createClient(SB_URL,SB_KEY);
 
-// ============================================================
-// STATO
-// ============================================================
-let ME = null;
-let _righe = [];
-let _preBatt = [];
-let _reparti = [], _attivita = [], _dips = [];
+let ME=null;
+let _righe=[],_preBatt=[];
+let _dips=[],_reparti=[],_attivita=[],_contratti=[],_livelli=[],_tipiProd=[];
 
-// ============================================================
 // UTILS
-// ============================================================
-const oggi = () => new Date().toISOString().split('T')[0];
-
-function calcOre(ini, fin) {
-  if (!ini || !fin) return 0;
-  const [h1,m1]=ini.split(':').map(Number), [h2,m2]=fin.split(':').map(Number);
+const oggi=()=>new Date().toISOString().split('T')[0];
+function calcOre(ini,fin){
+  if(!ini||!fin)return 0;
+  const[h1,m1]=ini.split(':').map(Number),[h2,m2]=fin.split(':').map(Number);
   let d=(h2*60+m2)-(h1*60+m1);
-  if(d<=0) d+=1440;
+  if(d<=0)d+=1440;
   return Math.round(d/60*100)/100;
 }
+function fmt€(n){return n!=null?'€'+Number(n).toFixed(2):'—';}
+function fmtN(n,dec=2){return n!=null?Number(n).toFixed(dec):'—';}
 
-function toast(msg, tipo='ok') {
+function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;
   el.style.background=tipo==='ok'?'#15803d':tipo==='warn'?'#c97010':'#b83228';
+  el.style.color='white';
   el.classList.add('show');
   clearTimeout(el._t);
-  el._t=setTimeout(()=>el.classList.remove('show'),2600);
+  el._t=setTimeout(()=>el.classList.remove('show'),2800);
 }
 
-function nomeDip(id) {
-  const d=_dips.find(x=>x.ID_Dipendente==id);
-  return d?d.Nome:id;
-}
-function nomeRep(id) {
-  const r=_reparti.find(x=>x.ID_Reparto==id);
-  return r?r.NomeReparto:id;
-}
-function nomeAtt(id) {
-  const a=_attivita.find(x=>x.ID_Attivita==id);
-  return a?a.NomeAttivita:id;
-}
+function nomeDip(id){const d=_dips.find(x=>x.ID_Dipendente==id);return d?d.Nome:id;}
+function nomeRep(id){const r=_reparti.find(x=>x.ID_Reparto==id);return r?r.NomeReparto:id;}
+function nomeAtt(id){const a=_attivita.find(x=>x.ID_Attivita==id);return a?a.NomeAttivita:id;}
+function nomeCont(id){const c=_contratti.find(x=>x.ID_Contratto==id);return c?c.NomeContratto:id;}
+function nomeLiv(id){const l=_livelli.find(x=>x.ID_Livello==id);return l?l.NomeLivello:id;}
+function nomeTipoProd(id){const t=_tipiProd.find(x=>x.ID_TipoProduzione==id);return t?t.TipoProduzione:id;}
 
-// ============================================================
-// CARICA DATI BASE
-// ============================================================
-async function caricaDatiBase() {
-  const [{data:d},{data:r},{data:a}] = await Promise.all([
-    sb.from('Dipendenti').select('*').order('Nome'),
+async function caricaDatiBase(){
+  const[{data:d},{data:r},{data:a},{data:c},{data:l},{data:t}]=await Promise.all([
+    sb.from('Dipendenti').select('*').eq('Attivo',true).order('Nome'),
     sb.from('Reparti').select('*').order('NomeReparto'),
-    sb.from('Attivita').select('*').order('NomeAttivita')
+    sb.from('Attivita').select('*').order('NomeAttivita'),
+    sb.from('Contratti').select('*'),
+    sb.from('Livelli').select('*'),
+    sb.from('TipiProduzione').select('*').eq('Attivo',true).order('TipoProduzione')
   ]);
-  _dips = d||[];
-  _reparti = r||[];
-  _attivita = a||[];
+  _dips=d||[];_reparti=r||[];_attivita=a||[];
+  _contratti=c||[];_livelli=l||[];_tipiProd=t||[];
 }
 
-// ============================================================
 // LOGIN
-// ============================================================
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-
-async function doLogin() {
+async function doLogin(){
   const user=document.getElementById('lu').value.trim();
   const pass=document.getElementById('lp').value.trim();
   const err=document.getElementById('lerr');
   err.textContent='Verifica...';
-  try {
-    const {data,error}=await sb.from('Utenti').select('*').eq('Username',user).eq('Password',pass);
-    if(error) throw error;
-    if(!data||data.length===0){err.textContent='Username o password errati.';return;}
-    ME={username:data[0].Username, ruolo:data[0].Ruolo};
+  try{
+    const{data,error}=await sb.from('Utenti').select('*').eq('Username',user).eq('Password',pass);
+    if(error)throw error;
+    if(!data||!data.length){err.textContent='Username o password errati.';return;}
+    ME={username:data[0].Username,ruolo:data[0].Ruolo};
     err.textContent='';
     await caricaDatiBase();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='block';
     document.getElementById('rbadge').textContent=ME.ruolo==='admin'?'👑 Amministratore':'🔧 Responsabile';
-    buildNav();
-    showFirstTab();
-  } catch(e) {
-    err.textContent='Errore connessione: '+e.message;
-  }
+    buildNav();showFirstTab();
+  }catch(e){err.textContent='Errore: '+e.message;}
 }
-
-function doLogout() {
+function doLogout(){
   ME=null;
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
@@ -242,51 +276,58 @@ function doLogout() {
   document.getElementById('lu').value='';
 }
 
-// ============================================================
 // NAV
-// ============================================================
-function buildNav() {
-  const tabs = ME.ruolo==='admin'
-    ? [['ti','✏️ Inserimento'],['tr','🔧 Ore Rapide'],['ta','🗄 Archivio'],['td','👥 Dipendenti'],['te','📤 Esporta']]
-    : [['tr','🔧 Ore Rapide']];
-  document.getElementById('mnav').innerHTML=tabs.map(([id,l])=>
-    `<button id="nb-${id}" onclick="showTab('${id}')">${l}</button>`).join('');
+const TABS_ADMIN=[
+  ['ti',`<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,'Inserimento'],
+  ['tr',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,'Ore Rapide'],
+  ['tprod',`<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,'Produzione'],
+  ['treport',`<svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,'Report'],
+  ['ta',`<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,'Archivio'],
+  ['tconf',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,'Configurazione'],
+  ['texport',`<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,'Esporta']
+];
+const TABS_RESP=[
+  ['tr',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,'Ore Rapide']
+];
+
+function buildNav(){
+  const tabs=ME.ruolo==='admin'?TABS_ADMIN:TABS_RESP;
+  document.getElementById('mnav').innerHTML=tabs.map(([id,icon,label])=>
+    `<button id="nb-${id}" onclick="showTab('${id}')">${icon}${label}</button>`).join('');
 }
 function showFirstTab(){showTab(ME.ruolo==='admin'?'ti':'tr');}
-
-async function showTab(id) {
+async function showTab(id){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
-  const nb=document.getElementById('nb-'+id);
-  if(nb)nb.classList.add('on');
-  document.getElementById('mc').innerHTML='<div class="loading">Caricamento...</div>';
+  const nb=document.getElementById('nb-'+id);if(nb)nb.classList.add('on');
+  document.getElementById('mc').innerHTML='<div class="loading">⏳ Caricamento...</div>';
   await caricaDatiBase();
-  if(id==='ti') renderInserimento();
-  else if(id==='tr') renderRapido();
-  else if(id==='ta') renderArchivio();
-  else if(id==='td') renderDipendenti();
-  else if(id==='te') renderExport();
+  if(id==='ti')renderInserimento();
+  else if(id==='tr')renderRapido();
+  else if(id==='tprod')renderProduzione();
+  else if(id==='treport')renderReport();
+  else if(id==='ta')renderArchivio();
+  else if(id==='tconf')renderConfig();
+  else if(id==='texport')renderExport();
+}
+
+// SELECT HELPERS
+function optDips(sel=''){return _dips.map(d=>`<option value="${d.ID_Dipendente}"${d.ID_Dipendente==sel?' selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');}
+function optReps(sel=''){return _reparti.map(r=>`<option value="${r.ID_Reparto}"${r.ID_Reparto==sel?' selected':''}>${r.NomeReparto}</option>`).join('');}
+function optAtts(idRep='',sel=''){
+  const f=idRep?_attivita.filter(a=>a.ID_Reparto==idRep):_attivita;
+  return f.map(a=>`<option value="${a.ID_Attivita}"${a.ID_Attivita==sel?' selected':''}>${a.NomeAttivita}</option>`).join('');
+}
+function optTipiProd(idRep='',sel=''){
+  const f=idRep?_tipiProd.filter(t=>t.ID_Reparto==idRep):_tipiProd;
+  return f.map(t=>`<option value="${t.ID_TipoProduzione}"${t.ID_TipoProduzione==sel?' selected':''}>${t.TipoProduzione} (${t.UnitaMisura})</option>`).join('');
 }
 
 // ============================================================
-// SELECTS HELPERS
+// TAB: ORE RAPIDE
 // ============================================================
-function optDips(selected='') {
-  return _dips.map(d=>`<option value="${d.ID_Dipendente}" ${d.ID_Dipendente==selected?'selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');
-}
-function optReps(selected='') {
-  return _reparti.map(r=>`<option value="${r.ID_Reparto}" ${r.ID_Reparto==selected?'selected':''}>${r.NomeReparto}</option>`).join('');
-}
-function optAtts(idRep='', selected='') {
-  const filtrate = idRep ? _attivita.filter(a=>a.ID_Reparto==idRep) : _attivita;
-  return filtrate.map(a=>`<option value="${a.ID_Attivita}" ${a.ID_Attivita==selected?'selected':''}>${a.NomeAttivita}</option>`).join('');
-}
-
-// ============================================================
-// TAB: ORE RAPIDE (RESPONSABILE)
-// ============================================================
-async function renderRapido() {
-  const {data:ultimi}=await sb.from('BattesimiPreTurno').select('*').order('created_at',{ascending:false}).limit(20);
-  const righeU=(ultimi||[]).map(m=>`
+async function renderRapido(){
+  const{data:ultimi}=await sb.from('BattesimiPreTurno').select('*').order('created_at',{ascending:false}).limit(30);
+  const righe=(ultimi||[]).map(m=>`
     <tr>
       <td><span class="bmov">PRE-${m.id}</span></td>
       <td><span class="bid">${m.ID_Dipendente}</span></td>
@@ -295,40 +336,42 @@ async function renderRapido() {
       <td><span class="pill py">${nomeRep(m.ID_Reparto)}</span></td>
       <td><span class="pill pg">${nomeAtt(m.ID_Attivita)}</span></td>
       <td><strong>${m.OreBattezzate}h</strong></td>
-      <td style="font-size:0.78rem;color:var(--grigio);">${m.Note||'—'}</td>
+      <td style="font-size:0.76rem;color:var(--grigio);">${m.Note||'—'}</td>
       <td><button class="btn br bsm" onclick="eliminaPreBatt(${m.id})">✕</button></td>
     </tr>`).join('')||'<tr><td colspan="9" class="empty">Nessuna registrazione recente</td></tr>';
 
   document.getElementById('mc').innerHTML=`
   <div class="card">
-    <div class="ct">🔧 Registra ore al volo</div>
+    <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Registra ore al volo</div>
     <div id="rmsg"></div>
     <div class="g4">
       <div class="fg"><label>Dipendente</label><select id="r-dip"><option value="">— Seleziona —</option>${optDips()}</select></div>
       <div class="fg"><label>Data</label><input id="r-data" type="date" value="${oggi()}"></div>
-      <div class="fg"><label>Reparto</label><select id="r-rep" onchange="aggiornaAttRapido()"><option value="">— Seleziona —</option>${optReps()}</select></div>
-      <div class="fg"><label>Attività</label><select id="r-att"><option value="">— Prima seleziona reparto —</option></select></div>
+      <div class="fg"><label>Reparto</label><select id="r-rep" onchange="aggAttiRapido()"><option value="">— Seleziona —</option>${optReps()}</select></div>
+      <div class="fg"><label>Attività</label><select id="r-att"><option value="">— Prima reparto —</option></select></div>
       <div class="fg"><label>Ore</label><input id="r-ore" type="number" min="0.5" max="24" step="0.5" placeholder="es. 4"></div>
       <div class="fg"><label>Note (opz.)</label><input id="r-note" type="text"></div>
     </div>
-    <div class="brow"><button class="btn bv" onclick="salvaRapido()">✔ Salva ore</button></div>
+    <div class="brow">
+      <button class="btn bv" onclick="salvaRapido()">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Salva ore
+      </button>
+    </div>
   </div>
   <div class="card">
-    <div class="ct">Ultime ore registrate</div>
+    <div class="ct">Ultime ore registrate dal responsabile</div>
     <div class="tw"><table>
       <thead><tr><th>ID</th><th>ID Dip</th><th>Dipendente</th><th>Data</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th><th></th></tr></thead>
-      <tbody>${righeU}</tbody>
+      <tbody>${righe}</tbody>
     </table></div>
   </div>`;
 }
-
-function aggiornaAttRapido() {
-  const idRep=document.getElementById('r-rep')?.value||'';
+function aggAttiRapido(){
+  const id=document.getElementById('r-rep')?.value||'';
   const el=document.getElementById('r-att');
-  if(el) el.innerHTML=`<option value="">— Seleziona —</option>${optAtts(idRep)}`;
+  if(el)el.innerHTML=`<option value="">— Seleziona —</option>${optAtts(id)}`;
 }
-
-async function salvaRapido() {
+async function salvaRapido(){
   const ID_Dipendente=document.getElementById('r-dip').value;
   const Data=document.getElementById('r-data').value;
   const ID_Reparto=document.getElementById('r-rep').value;
@@ -339,25 +382,23 @@ async function salvaRapido() {
   if(!ID_Dipendente||!Data||!ID_Reparto||!ID_Attivita||!OreBattezzate){
     msg.innerHTML='<div class="alert aerr">Compila tutti i campi obbligatori.</div>';return;
   }
-  const {error}=await sb.from('BattesimiPreTurno').insert({ID_Dipendente,Data,ID_Reparto,ID_Attivita,OreBattezzate,Note});
-  if(error){msg.innerHTML=`<div class="alert aerr">Errore: ${error.message}</div>`;return;}
-  toast('✔ Ore salvate');
-  showTab('tr');
+  const{error}=await sb.from('BattesimiPreTurno').insert({ID_Dipendente,Data,ID_Reparto,ID_Attivita,OreBattezzate,Note});
+  if(error){msg.innerHTML=`<div class="alert aerr">${error.message}</div>`;return;}
+  toast('✔ Ore salvate');showTab('tr');
 }
-
-async function eliminaPreBatt(id) {
-  if(!confirm('Eliminare?')) return;
+async function eliminaPreBatt(id){
+  if(!confirm('Eliminare?'))return;
   await sb.from('BattesimiPreTurno').delete().eq('id',id);
-  toast('Eliminato','warn'); showTab('tr');
+  toast('Eliminato','warn');showTab('tr');
 }
 
 // ============================================================
-// TAB: INSERIMENTO ADMIN
+// TAB: INSERIMENTO TURNI
 // ============================================================
-async function renderInserimento() {
-  const {data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(15);
+async function renderInserimento(){
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(15);
   const righeGG=await Promise.all((ggs||[]).map(async g=>{
-    const {data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',g.ID_Turno);
+    const{data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',g.ID_Turno);
     return `<tr>
       <td><span class="bid">${g.ID_Dipendente}</span></td>
       <td>${nomeDip(g.ID_Dipendente)}</td>
@@ -373,52 +414,56 @@ async function renderInserimento() {
   document.getElementById('mc').innerHTML=`
   <div id="imsg"></div>
   <div class="card">
-    <div class="ct">1 — Testata turno</div>
-    <div class="g4">
+    <div class="ct"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> 1 — Testata turno</div>
+    <div class="g5">
       <div class="fg"><label>Dipendente</label>
-        <select id="i-dip" onchange="caricaPreBattAdmin()"><option value="">— Seleziona —</option>${optDips()}</select>
+        <select id="i-dip" onchange="caricaPreAdmin()"><option value="">— Seleziona —</option>${optDips()}</select>
       </div>
-      <div class="fg"><label>Data inizio</label><input id="i-data" type="date" value="${oggi()}" onchange="caricaPreBattAdmin()"></div>
-      <div class="fg"><label>Ora inizio</label><input id="i-ini" type="time" onchange="calcOreTurno()"></div>
-      <div class="fg"><label>Ora fine</label><input id="i-fin" type="time" onchange="calcOreTurno()"></div>
-      <div class="fg"><label>Ore giorno A</label><input id="i-orea" type="text" readonly placeholder="—"></div>
-      <div class="fg"><label>Ore giorno B (+1gg)</label><input id="i-oreb" type="text" readonly placeholder="—"></div>
-      <div class="fg"><label>Ore totali</label><input id="i-oretot" type="text" readonly placeholder="—"></div>
+      <div class="fg"><label>Data inizio</label><input id="i-data" type="date" value="${oggi()}" onchange="caricaPreAdmin()"></div>
+      <div class="fg"><label>Ora inizio</label><input id="i-ini" type="time" oninput="calcT()"></div>
+      <div class="fg"><label>Ora fine</label><input id="i-fin" type="time" oninput="calcT()"></div>
+      <div class="fg"><label>Ore A / B / Tot</label><input id="i-oretot" type="text" readonly placeholder="—"></div>
     </div>
   </div>
 
   <div class="card" id="cbatt" style="display:none;">
-    <div class="ct">2 — Battesimo ore per reparto / attività</div>
+    <div class="ct"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> 2 — Battesimo ore</div>
     <div id="prebatt-box"></div>
     <div class="ore-bar">
       <div>
-        <div style="font-size:0.68rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Rimanenti</div>
+        <div style="font-size:0.65rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Rimanenti</div>
         <div class="num ok" id="ore-rim">—</div>
       </div>
       <div style="flex:1;height:8px;background:var(--bordo);border-radius:4px;overflow:hidden;">
         <div id="barra" style="height:100%;width:0%;background:var(--verde);border-radius:4px;transition:width 0.3s,background 0.3s;"></div>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:0.68rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Battezzate</div>
+        <div style="font-size:0.65rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Battezzate</div>
         <div class="num ok" id="ore-batt">0h</div>
       </div>
     </div>
-    <div style="font-size:0.68rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">N° — Reparto — Attività — Ore — Note</div>
     <div id="righe-ore"></div>
     <div class="brow">
-      <button class="btn bo bsm" onclick="addRiga()">+ Aggiungi riga</button>
+      <button class="btn bo bsm" onclick="addRiga()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Aggiungi riga
+      </button>
     </div>
-    <div class="brow" style="margin-top:16px;border-top:1px solid var(--sfondo);padding-top:12px;">
-      <button class="btn bv" onclick="salvaTurno()">✔ Salva turno</button>
+    <div class="brow" style="margin-top:14px;border-top:1px solid var(--sfondo);padding-top:12px;">
+      <button class="btn bv" onclick="salvaTurno()">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Salva turno
+      </button>
       <button class="btn bo" onclick="resetIns()">✕ Annulla</button>
     </div>
   </div>
 
   <div id="bavanza">
-    <button class="btn bp" onclick="avanzaBatt()" style="width:100%;padding:12px;">Avanti → Battesimo ore</button>
+    <button class="btn bp" onclick="avanzaBatt()" style="width:100%;padding:12px;justify-content:center;">
+      Avanti → Battesimo ore
+      <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
   </div>
 
-  <div class="card" style="margin-top:18px;">
+  <div class="card" style="margin-top:16px;">
     <div class="ct">Ultimi turni inseriti</div>
     <div class="tw"><table>
       <thead><tr><th>ID Dip</th><th>Nome</th><th>Data</th><th>Inizio</th><th>Fine</th><th>Ore A+B</th><th>Battesimi</th><th></th></tr></thead>
@@ -427,45 +472,32 @@ async function renderInserimento() {
   </div>`;
 }
 
-function calcOreTurno() {
+function calcT(){
   const ini=document.getElementById('i-ini')?.value;
   const fin=document.getElementById('i-fin')?.value;
-  if(!ini||!fin) return;
+  if(!ini||!fin)return;
   const tot=calcOre(ini,fin);
   const notturno=fin<ini;
-  // Ore_A = ore nella data di inizio (fino a mezzanotte), Ore_B = ore nel giorno dopo
-  let oreA=tot, oreB=0;
-  if(notturno){
-    const [h1,m1]=ini.split(':').map(Number);
-    oreA=Math.round((24*60-(h1*60+m1))/60*100)/100;
-    oreB=Math.round((tot-oreA)*100)/100;
-  }
-  const elA=document.getElementById('i-orea');
-  const elB=document.getElementById('i-oreb');
-  const elT=document.getElementById('i-oretot');
-  if(elA) elA.value=oreA+'h';
-  if(elB) elB.value=oreB>0?oreB+'h':'0h';
-  if(elT) elT.value=tot+'h'+(notturno?' (+1gg)':'');
+  const[h1,m1]=ini.split(':').map(Number);
+  const oreA=notturno?Math.round((24*60-(h1*60+m1))/60*100)/100:tot;
+  const oreB=notturno?Math.round((tot-oreA)*100)/100:0;
+  const el=document.getElementById('i-oretot');
+  if(el)el.value=`${oreA}h + ${oreB}h = ${tot}h${notturno?' (+1gg)':''}`;
   aggBar();
 }
 
-async function caricaPreBattAdmin() {
+async function caricaPreAdmin(){
   const id=document.getElementById('i-dip')?.value;
   const data=document.getElementById('i-data')?.value;
-  if(!id||!data) return;
-  const {data:pre}=await sb.from('BattesimiPreTurno').select('*').eq('ID_Dipendente',id).eq('Data',data);
+  if(!id||!data)return;
+  const{data:pre}=await sb.from('BattesimiPreTurno').select('*').eq('ID_Dipendente',id).eq('Data',data);
   _preBatt=pre||[];
-  renderPreBattBox();
-  aggBar();
-}
-
-function renderPreBattBox() {
   const box=document.getElementById('prebatt-box');
-  if(!box) return;
+  if(!box)return;
   if(!_preBatt.length){box.innerHTML='';return;}
   box.innerHTML=`<div style="margin-bottom:10px;">
-    <div style="font-size:0.68rem;font-weight:800;color:var(--arancio);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">
-      ⚠ ${_preBatt.length} ore pre-battezzate dal responsabile — incluse nel conteggio
+    <div style="font-size:0.67rem;font-weight:800;color:var(--arancio);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">
+      ⚠ ${_preBatt.length} ore pre-battezzate dal responsabile — incluse automaticamente
     </div>
     ${_preBatt.map(m=>`<div class="prow">
       <span class="pill po">resp.</span>
@@ -474,37 +506,40 @@ function renderPreBattBox() {
       <strong>${m.OreBattezzate}h</strong>
     </div>`).join('')}
   </div>`;
+  aggBar();
 }
 
-async function avanzaBatt() {
+async function avanzaBatt(){
   const id=document.getElementById('i-dip')?.value;
   const data=document.getElementById('i-data')?.value;
   const ini=document.getElementById('i-ini')?.value;
   const fin=document.getElementById('i-fin')?.value;
   const msg=document.getElementById('imsg');
   if(!id||!data||!ini||!fin){msg.innerHTML='<div class="alert aerr">Compila tutti i campi.</div>';return;}
-  const ore=calcOre(ini,fin);
-  if(ore<=0){msg.innerHTML='<div class="alert aerr">Orario non valido.</div>';return;}
-  await caricaPreBattAdmin();
+  if(calcOre(ini,fin)<=0){msg.innerHTML='<div class="alert aerr">Orario non valido.</div>';return;}
+  await caricaPreAdmin();
   document.getElementById('cbatt').style.display='block';
   document.getElementById('bavanza').style.display='none';
   _righe=[];
-  if(_preBatt.length===0) addRiga();
+  if(!_preBatt.length)addRiga();
   else renderRighe();
   aggBar();
 }
 
-function addRiga() {
-  _righe.push({ID_Reparto:'',ID_Attivita:'',OreBattezzate:'',Note:''});
-  renderRighe(); aggBar();
+function addRiga(){_righe.push({ID_Reparto:'',ID_Attivita:'',OreBattezzate:'',Note:''});renderRighe();aggBar();}
+function removeRiga(i){if(_righe.length<=1)return;_righe.splice(i,1);renderRighe();aggBar();}
+function rigaRepChange(i,idRep){
+  _righe[i].ID_Reparto=idRep;_righe[i].ID_Attivita='';
+  const el=document.getElementById('ratt-'+i);
+  if(el)el.innerHTML=`<option value="">— Seleziona —</option>${optAtts(idRep)}`;
+  aggBar();
 }
 
-function renderRighe() {
-  const wrap=document.getElementById('righe-ore');
-  if(!wrap) return;
+function renderRighe(){
+  const wrap=document.getElementById('righe-ore');if(!wrap)return;
   wrap.innerHTML=_righe.map((r,i)=>`
     <div class="qrow">
-      <div style="font-family:var(--mono);font-size:0.78rem;color:var(--grigio);padding-top:22px;font-weight:700;">${i+1}</div>
+      <div style="font-family:var(--mono);font-size:0.76rem;color:var(--grigio);padding-top:22px;font-weight:700;">${i+1}</div>
       <div class="fg"><label>Reparto</label>
         <select onchange="rigaRepChange(${i},this.value)">
           <option value="">— Seleziona —</option>${optReps(r.ID_Reparto)}
@@ -512,7 +547,7 @@ function renderRighe() {
       </div>
       <div class="fg"><label>Attività</label>
         <select id="ratt-${i}" onchange="_righe[${i}].ID_Attivita=this.value;aggBar()">
-          <option value="">— Prima reparto —</option>${optAtts(r.ID_Reparto,r.ID_Attivita)}
+          <option value="">— Seleziona —</option>${optAtts(r.ID_Reparto,r.ID_Attivita)}
         </select>
       </div>
       <div class="fg"><label>Ore</label>
@@ -520,8 +555,7 @@ function renderRighe() {
           oninput="_righe[${i}].OreBattezzate=parseFloat(this.value)||0;aggBar()">
       </div>
       <div class="fg"><label>Note</label>
-        <input type="text" value="${r.Note||''}" placeholder="opz."
-          oninput="_righe[${i}].Note=this.value">
+        <input type="text" value="${r.Note||''}" placeholder="opz." oninput="_righe[${i}].Note=this.value">
       </div>
       <div class="fg" style="align-items:flex-end;"><label>&nbsp;</label>
         <button class="btn br bsm" onclick="removeRiga(${i})" ${_righe.length<=1?'disabled':''}>✕</button>
@@ -529,112 +563,416 @@ function renderRighe() {
     </div>`).join('');
 }
 
-function rigaRepChange(i, idRep) {
-  _righe[i].ID_Reparto=idRep;
-  _righe[i].ID_Attivita='';
-  const el=document.getElementById('ratt-'+i);
-  if(el) el.innerHTML=`<option value="">— Seleziona —</option>${optAtts(idRep)}`;
-  aggBar();
-}
-
-function removeRiga(i){if(_righe.length<=1)return;_righe.splice(i,1);renderRighe();aggBar();}
-
-function oreTotN(){
-  const ini=document.getElementById('i-ini')?.value;
-  const fin=document.getElementById('i-fin')?.value;
-  return calcOre(ini,fin);
-}
+function oreTotN(){return calcOre(document.getElementById('i-ini')?.value,document.getElementById('i-fin')?.value);}
 function oreBattN(){
   const fr=_righe.reduce((a,r)=>a+(parseFloat(r.OreBattezzate)||0),0);
   const fp=_preBatt.reduce((a,m)=>a+m.OreBattezzate,0);
   return Math.round((fr+fp)*100)/100;
 }
-
 function aggBar(){
-  const tot=oreTotN(), batt=oreBattN(), rim=Math.round((tot-batt)*100)/100;
+  const tot=oreTotN(),batt=oreBattN(),rim=Math.round((tot-batt)*100)/100;
   const pct=tot>0?Math.min(100,Math.round(batt/tot*100)):0;
-  const er=document.getElementById('ore-rim'), eb=document.getElementById('ore-batt'), bar=document.getElementById('barra');
-  if(!er) return;
-  er.textContent=rim+'h'; eb.textContent=batt+'h';
+  const er=document.getElementById('ore-rim'),eb=document.getElementById('ore-batt'),bar=document.getElementById('barra');
+  if(!er)return;
+  er.textContent=rim+'h';eb.textContent=batt+'h';
   er.className='num '+(rim===0?'ok':rim<0?'err':'warn');
   if(bar){bar.style.width=pct+'%';bar.style.background=rim===0?'#15803d':rim<0?'#b83228':'#c97010';}
 }
 
-async function salvaTurno() {
+async function salvaTurno(){
   const ID_Dipendente=document.getElementById('i-dip').value;
   const DataInizio=document.getElementById('i-data').value;
   const OraInizio=document.getElementById('i-ini').value;
   const OraFine=document.getElementById('i-fin').value;
   const msg=document.getElementById('imsg');
-  const tot=oreTotN(), batt=oreBattN();
+  const tot=oreTotN(),batt=oreBattN();
   const notturno=OraFine<OraInizio;
-  const [h1,m1]=OraInizio.split(':').map(Number);
+  const[h1,m1]=OraInizio.split(':').map(Number);
   const Ore_A=notturno?Math.round((24*60-(h1*60+m1))/60*100)/100:tot;
   const Ore_B=notturno?Math.round((tot-Ore_A)*100)/100:0;
-
   for(let i=0;i<_righe.length;i++){
     const r=_righe[i];
-    if(!r.ID_Reparto||!r.ID_Attivita||!r.OreBattezzate){
-      msg.innerHTML=`<div class="alert aerr">Riga ${i+1}: compila reparto, attività e ore.</div>`;return;
-    }
+    if(!r.ID_Reparto||!r.ID_Attivita||!r.OreBattezzate){msg.innerHTML=`<div class="alert aerr">Riga ${i+1}: completa tutti i campi.</div>`;return;}
   }
-  const diff=Math.round((tot-batt)*100)/100;
-  if(diff!==0){msg.innerHTML=`<div class="alert aerr">Le ore battezzate (${batt}h) non corrispondono alle ore totali (${tot}h). Differenza: ${diff}h</div>`;return;}
-
-  // rimuovi turno esistente stesso dip+data
-  const {data:old}=await sb.from('TurniGiornalieri').select('ID_Turno').eq('ID_Dipendente',ID_Dipendente).eq('DataInizio',DataInizio).single();
+  if(Math.abs(tot-batt)>0.01){msg.innerHTML=`<div class="alert aerr">Ore battezzate (${batt}h) ≠ ore totali (${tot}h). Differenza: ${Math.round((tot-batt)*100)/100}h</div>`;return;}
+  const{data:old}=await sb.from('TurniGiornalieri').select('ID_Turno').eq('ID_Dipendente',ID_Dipendente).eq('DataInizio',DataInizio).single();
   if(old){
     await sb.from('BattesimiTurno').delete().eq('ID_Turno',old.ID_Turno);
     await sb.from('TurniGiornalieri').delete().eq('ID_Turno',old.ID_Turno);
   }
-
-  const {data:turno,error:et}=await sb.from('TurniGiornalieri').insert({ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B}).select().single();
+  const{data:turno,error:et}=await sb.from('TurniGiornalieri').insert({ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B}).select().single();
   if(et){msg.innerHTML=`<div class="alert aerr">${et.message}</div>`;return;}
-
-  // salva righe nuove
   for(let i=0;i<_righe.length;i++){
     const r=_righe[i];
     await sb.from('BattesimiTurno').insert({ID_Turno:turno.ID_Turno,OrdineRiga:i+1,ID_Reparto:r.ID_Reparto,ID_Attivita:r.ID_Attivita,OreBattezzate:parseFloat(r.OreBattezzate),Note:r.Note||''});
   }
-  // collega i pre-battesimi al turno
   for(const p of _preBatt){
     await sb.from('BattesimiTurno').insert({ID_Turno:turno.ID_Turno,OrdineRiga:99,ID_Reparto:p.ID_Reparto,ID_Attivita:p.ID_Attivita,OreBattezzate:p.OreBattezzate,Note:p.Note||''});
     await sb.from('BattesimiPreTurno').delete().eq('id',p.id);
   }
-
-  toast('✔ Turno salvato');
-  resetIns();
-  showTab('ti');
+  toast('✔ Turno salvato');resetIns();showTab('ti');
 }
 
 function resetIns(){
-  ['i-dip','i-data','i-ini','i-fin','i-orea','i-oreb','i-oretot'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
-  const cb=document.getElementById('cbatt'), bav=document.getElementById('bavanza');
-  if(cb)cb.style.display='none'; if(bav)bav.style.display='block';
+  ['i-dip','i-data','i-ini','i-fin','i-oretot'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
+  const cb=document.getElementById('cbatt'),bav=document.getElementById('bavanza');
+  if(cb)cb.style.display='none';if(bav)bav.style.display='block';
   _righe=[];_preBatt=[];
 }
-
 async function eliminaTurno(id){
-  if(!confirm('Eliminare questo turno e i suoi battesimi?')) return;
+  if(!confirm('Eliminare questo turno e tutti i suoi battesimi?'))return;
   await sb.from('BattesimiTurno').delete().eq('ID_Turno',id);
   await sb.from('TurniGiornalieri').delete().eq('ID_Turno',id);
-  toast('Eliminato','warn'); showTab('ti');
+  toast('Eliminato','warn');showTab('ti');
+}
+
+// ============================================================
+// TAB: PRODUZIONE
+// ============================================================
+async function renderProduzione(){
+  const{data:ultimiRep}=await sb.from('ProduzioneReparti').select('*').order('DataProduzione',{ascending:false}).limit(30);
+  const righeRep=(ultimiRep||[]).map(p=>`
+    <tr>
+      <td>${p.DataProduzione}</td>
+      <td><span class="pill py">${nomeRep(p.ID_Reparto)}</span></td>
+      <td>${nomeTipoProd(p.ID_TipoProduzione)}</td>
+      <td><strong>${p.Quantita}</strong></td>
+      <td>${p.Notturno?'<span class="pill pv">Notturno</span>':'<span class="pill pb">Diurno</span>'}</td>
+      <td><button class="btn br bsm" onclick="eliminaProdRep(${p.ID_Produzione})">✕</button></td>
+    </tr>`).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
+
+  document.getElementById('mc').innerHTML=`
+  <div class="card">
+    <div class="ct"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Inserimento produzione reparti</div>
+    <div id="pmsg"></div>
+    <div class="g4">
+      <div class="fg"><label>Data</label><input id="p-data" type="date" value="${oggi()}"></div>
+      <div class="fg"><label>Reparto</label><select id="p-rep" onchange="aggTipiProd()"><option value="">— Seleziona —</option>${optReps()}</select></div>
+      <div class="fg"><label>Tipo produzione</label><select id="p-tipo"><option value="">— Prima reparto —</option></select></div>
+      <div class="fg"><label>Quantità</label><input id="p-qty" type="number" min="0" step="1" placeholder="es. 1000"></div>
+      <div class="fg"><label>Turno</label>
+        <select id="p-turno">
+          <option value="false">Diurno</option>
+          <option value="true">Notturno</option>
+        </select>
+      </div>
+    </div>
+    <div class="brow">
+      <button class="btn bv" onclick="salvaProdRep()">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Salva produzione
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Importa produzione operatori (Excel)</div>
+    <p style="font-size:0.82rem;color:var(--grigio);margin-bottom:14px;">
+      Carica il file Excel del cliente. Colonne richieste: <strong>DataProduzione, CodiceVoice, ID_Attivita, Colli</strong>
+    </p>
+    <div class="upload-area" onclick="document.getElementById('file-prod').click()">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p>Clicca o trascina il file Excel qui</p>
+      <input type="file" id="file-prod" accept=".xlsx,.xls,.csv" onchange="importaProduzione(event)">
+    </div>
+    <div id="import-msg" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Ultime produzioni reparti</div>
+    <div class="tw"><table>
+      <thead><tr><th>Data</th><th>Reparto</th><th>Tipo</th><th>Quantità</th><th>Turno</th><th></th></tr></thead>
+      <tbody>${righeRep}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function aggTipiProd(){
+  const id=document.getElementById('p-rep')?.value||'';
+  const el=document.getElementById('p-tipo');
+  if(el)el.innerHTML=`<option value="">— Seleziona —</option>${optTipiProd(id)}`;
+}
+
+async function salvaProdRep(){
+  const DataProduzione=document.getElementById('p-data').value;
+  const ID_Reparto=document.getElementById('p-rep').value;
+  const ID_TipoProduzione=document.getElementById('p-tipo').value;
+  const Quantita=parseFloat(document.getElementById('p-qty').value);
+  const Notturno=document.getElementById('p-turno').value==='true';
+  const msg=document.getElementById('pmsg');
+  if(!DataProduzione||!ID_Reparto||!ID_TipoProduzione||!Quantita){
+    msg.innerHTML='<div class="alert aerr">Compila tutti i campi.</div>';return;
+  }
+  const{error}=await sb.from('ProduzioneReparti').insert({DataProduzione,ID_Reparto,ID_TipoProduzione,Quantita,Notturno});
+  if(error){msg.innerHTML=`<div class="alert aerr">${error.message}</div>`;return;}
+  toast('✔ Produzione salvata');showTab('tprod');
+}
+
+async function eliminaProdRep(id){
+  if(!confirm('Eliminare?'))return;
+  await sb.from('ProduzioneReparti').delete().eq('ID_Produzione',id);
+  toast('Eliminato','warn');showTab('tprod');
+}
+
+async function importaProduzione(e){
+  const file=e.target.files[0];if(!file)return;
+  const msg=document.getElementById('import-msg');
+  msg.innerHTML='<div class="alert awarn">Elaborazione file...</div>';
+  try{
+    const{read,utils}=await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+    const ab=await file.arrayBuffer();
+    const wb=read(ab);
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=utils.sheet_to_json(ws);
+    let ok=0,skip=0;
+    for(const row of rows){
+      const DataProduzione=row['DataProduzione']||row['Data']||row['data'];
+      const CodiceVoice=row['CodiceVoice']||row['codice_voice']||row['Operatore'];
+      const Colli=row['Colli']||row['colli'];
+      const ID_Attivita=row['ID_Attivita']||row['id_attivita']||15;
+      if(!DataProduzione||!CodiceVoice||!Colli){skip++;continue;}
+      // normalizza data
+      let dataNorm=DataProduzione;
+      if(typeof DataProduzione==='number'){
+        const d=new Date(Math.round((DataProduzione-25569)*86400*1000));
+        dataNorm=d.toISOString().split('T')[0];
+      } else if(typeof DataProduzione==='string'&&DataProduzione.includes('/')){
+        const p=DataProduzione.split('/');
+        dataNorm=`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+      }
+      const{error}=await sb.from('ProduzioneOperatori').insert({
+        DataProduzione:dataNorm,
+        CodiceVoice:parseInt(CodiceVoice),
+        ID_Attivita:parseInt(ID_Attivita),
+        Colli:parseFloat(Colli)
+      });
+      if(error)skip++;else ok++;
+    }
+    msg.innerHTML=`<div class="alert aok">✔ Importati ${ok} record. ${skip>0?`${skip} saltati.`:''}</div>`;
+  }catch(err){
+    msg.innerHTML=`<div class="alert aerr">Errore importazione: ${err.message}</div>`;
+  }
+}
+
+// ============================================================
+// TAB: REPORT
+// ============================================================
+async function renderReport(){
+  const mc=document.getElementById('mc');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="ct"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Filtri report</div>
+    <div class="g4">
+      <div class="fg"><label>Dal</label><input id="rp-dal" type="date" value="${oggi().slice(0,7)+'-01'}"></div>
+      <div class="fg"><label>Al</label><input id="rp-al" type="date" value="${oggi()}"></div>
+      <div class="fg"><label>Dipendente</label><select id="rp-dip"><option value="">Tutti</option>${optDips()}</select></div>
+      <div class="fg"><label>Reparto</label><select id="rp-rep"><option value="">Tutti</option>${optReps()}</select></div>
+    </div>
+    <div class="brow"><button class="btn bp" onclick="caricaReport()">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Genera report
+    </button></div>
+  </div>
+  <div id="report-content"><div class="empty">Seleziona il periodo e clicca "Genera report"</div></div>`;
+}
+
+async function caricaReport(){
+  const dal=document.getElementById('rp-dal').value;
+  const al=document.getElementById('rp-al').value;
+  const fdip=document.getElementById('rp-dip').value;
+  const frep=document.getElementById('rp-rep').value;
+  const cont=document.getElementById('report-content');
+  cont.innerHTML='<div class="loading">⏳ Elaborazione dati...</div>';
+
+  // Turni nel periodo
+  let qgg=sb.from('TurniGiornalieri').select('*');
+  if(dal)qgg=qgg.gte('DataInizio',dal);
+  if(al)qgg=qgg.lte('DataInizio',al);
+  if(fdip)qgg=qgg.eq('ID_Dipendente',fdip);
+  const{data:ggs}=await qgg;
+
+  const idTurni=(ggs||[]).map(g=>g.ID_Turno);
+  let bats=[];
+  if(idTurni.length){
+    let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni);
+    if(frep)qb=qb.eq('ID_Reparto',frep);
+    const{data:b}=await qb;
+    bats=b||[];
+  }
+
+  // Produzione reparti nel periodo
+  let qpr=sb.from('ProduzioneReparti').select('*');
+  if(dal)qpr=qpr.gte('DataProduzione',dal);
+  if(al)qpr=qpr.lte('DataProduzione',al);
+  if(frep)qpr=qpr.eq('ID_Reparto',frep);
+  const{data:prods}=await qpr;
+
+  // Produzione operatori + calcolo produttività att.15
+  const{data:prodOp}=await sb.from('ProduzioneOperatori').select('*')
+    .gte('DataProduzione',dal||'2020-01-01')
+    .lte('DataProduzione',al||oggi())
+    .eq('ID_Attivita',15);
+
+  // Tariffe produzione
+  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
+  const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
+
+  // CALCOLI ORE
+  const totOre=(ggs||[]).reduce((a,g)=>a+g.Ore_A+g.Ore_B,0);
+  const totOreNotte=bats.filter(b=>{
+    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+    return g&&g.OraInizio>='22:00'||g&&g.OraFine<='06:00'||g&&g.Ore_B>0;
+  }).reduce((a,b)=>a+b.OreBattezzate,0);
+
+  // Ore per reparto
+  const orePerRep={};
+  bats.forEach(b=>{
+    const k=b.ID_Reparto;
+    if(!orePerRep[k])orePerRep[k]={ore:0,oreNotte:0};
+    orePerRep[k].ore+=b.OreBattezzate;
+  });
+
+  // COSTO LAVORO
+  let costoTotale=0;
+  (ggs||[]).forEach(g=>{
+    const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
+    if(!d)return;
+    const te=tariffeEco?.find(x=>x.ID_Contratto==d.ID_Contratto);
+    if(!te)return;
+    const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
+    bGG.forEach(b=>{
+      // semplificazione: ore notturne se Ore_B>0
+      const tariffa=g.Ore_B>0?te.TariffaNotturna:te.TariffaOrdinaria;
+      costoTotale+=b.OreBattezzate*(tariffa||0);
+    });
+  });
+
+  // FATTURATO PRODUZIONE
+  let fatturato=0;
+  (prods||[]).forEach(p=>{
+    const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
+    if(!t||!t.length)return;
+    // scegli tariffa in base a turno
+    const tf=t.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t.find(x=>x.TipoTurno==='Tutti')||t[0];
+    if(tf)fatturato+=p.Quantita*tf.Tariffa;
+  });
+
+  // PRODUTTIVITA' ORE ATTIVITA' 15
+  const totColliAtt15=(prodOp||[]).reduce((a,p)=>a+p.Colli,0);
+  const oreAtt15=bats.filter(b=>b.ID_Attivita==15).reduce((a,b)=>a+b.OreBattezzate,0);
+  const produttivita=oreAtt15>0?Math.round(totColliAtt15/oreAtt15):0;
+
+  const margine=fatturato-costoTotale;
+
+  // TABELLA ORE PER DIPENDENTE
+  const orePerDip={};
+  (ggs||[]).forEach(g=>{
+    if(!orePerDip[g.ID_Dipendente])orePerDip[g.ID_Dipendente]={ore:0,oreN:0,costo:0};
+    orePerDip[g.ID_Dipendente].ore+=g.Ore_A+g.Ore_B;
+    orePerDip[g.ID_Dipendente].oreN+=g.Ore_B||0;
+    const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
+    if(d){
+      const te=tariffeEco?.find(x=>x.ID_Contratto==d.ID_Contratto);
+      if(te){
+        const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
+        bGG.forEach(b=>{
+          const tariffa=g.Ore_B>0?te.TariffaNotturna:te.TariffaOrdinaria;
+          orePerDip[g.ID_Dipendente].costo+=b.OreBattezzate*(tariffa||0);
+        });
+      }
+    }
+  });
+
+  const righeOrePerDip=Object.entries(orePerDip).sort((a,b)=>b[1].ore-a[1].ore).map(([idDip,v])=>`
+    <tr>
+      <td><span class="bid">${idDip}</span></td>
+      <td>${nomeDip(idDip)}</td>
+      <td><strong>${fmtN(v.ore)}h</strong></td>
+      <td>${fmtN(v.oreN)}h</td>
+      <td>${fmt€(v.costo)}</td>
+    </tr>`).join('')||'<tr><td colspan="5" class="empty">Nessun dato</td></tr>';
+
+  // TABELLA ORE PER REPARTO
+  const righeOrePerRep=Object.entries(orePerRep).sort((a,b)=>b[1].ore-a[1].ore).map(([idRep,v])=>`
+    <tr>
+      <td><span class="pill py">${nomeRep(idRep)}</span></td>
+      <td><strong>${fmtN(v.ore)}h</strong></td>
+    </tr>`).join('')||'<tr><td colspan="2" class="empty">Nessun dato</td></tr>';
+
+  // TABELLA PRODUZIONE
+  const righeProds=(prods||[]).slice(0,50).map(p=>{
+    const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
+    const tf=t?.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t?.find(x=>x.TipoTurno==='Tutti');
+    const val=tf?p.Quantita*tf.Tariffa:0;
+    return `<tr>
+      <td>${p.DataProduzione}</td>
+      <td><span class="pill py">${nomeRep(p.ID_Reparto)}</span></td>
+      <td>${nomeTipoProd(p.ID_TipoProduzione)}</td>
+      <td>${p.Quantita}</td>
+      <td>${p.Notturno?'<span class="pill pv">Notte</span>':'<span class="pill pb">Giorno</span>'}</td>
+      <td>${fmt€(val)}</td>
+    </tr>`;}).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
+
+  cont.innerHTML=`
+  <div class="rep-grid">
+    <div class="rep-card rc-blue">
+      <div class="rc-title">Ore totali lavorate</div>
+      <div class="rc-val">${fmtN(totOre,1)}h</div>
+      <div class="rc-sub">Di cui notturne: ${fmtN(totOreNotte,1)}h</div>
+    </div>
+    <div class="rep-card rc-orange">
+      <div class="rc-title">Costo lavoro stimato</div>
+      <div class="rc-val">${fmt€(costoTotale)}</div>
+      <div class="rc-sub">Basato su tariffe contratto</div>
+    </div>
+    <div class="rep-card rc-green">
+      <div class="rc-title">Fatturato produzione</div>
+      <div class="rc-val">${fmt€(fatturato)}</div>
+      <div class="rc-sub">${(prods||[]).length} voci produzione</div>
+    </div>
+    <div class="rep-card ${margine>=0?'rc-green':'rc-red'}">
+      <div class="rc-title">Margine operativo</div>
+      <div class="rc-val">${fmt€(margine)}</div>
+      <div class="rc-sub">Fatturato - Costo lavoro</div>
+    </div>
+    <div class="rep-card rc-viola">
+      <div class="rc-title">Produttività ortofrutta (att.15)</div>
+      <div class="rc-val">${produttivita}</div>
+      <div class="rc-sub">Colli/ora — tot. ${totColliAtt15} colli su ${fmtN(oreAtt15,1)}h</div>
+    </div>
+  </div>
+
+  <div class="g2" style="gap:14px;margin-bottom:14px;">
+    <div class="card" style="margin:0;">
+      <div class="ct">Ore per dipendente</div>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Nome</th><th>Ore Totali</th><th>Ore Notte</th><th>Costo Stimato</th></tr></thead>
+        <tbody>${righeOrePerDip}</tbody>
+      </table></div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="ct">Ore per reparto</div>
+      <div class="tw"><table>
+        <thead><tr><th>Reparto</th><th>Ore Totali</th></tr></thead>
+        <tbody>${righeOrePerRep}</tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Dettaglio produzione reparti</div>
+    <div class="tw"><table>
+      <thead><tr><th>Data</th><th>Reparto</th><th>Tipo</th><th>Quantità</th><th>Turno</th><th>Valore €</th></tr></thead>
+      <tbody>${righeProds}</tbody>
+    </table></div>
+  </div>`;
 }
 
 // ============================================================
 // TAB: ARCHIVIO
 // ============================================================
-async function renderArchivio() {
-  const {data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(200);
-  const {data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(500);
-  const totOre=(bats||[]).reduce((a,b)=>a+b.OreBattezzate,0);
-
-  const stats=`<div class="stats">
-    <div class="stat"><div class="n">${_dips.length}</div><div class="l">Dipendenti</div></div>
-    <div class="stat"><div class="n">${(ggs||[]).length}</div><div class="l">Turni totali</div></div>
-    <div class="stat"><div class="n">${(bats||[]).length}</div><div class="l">Battesimi</div></div>
-    <div class="stat"><div class="n">${totOre.toFixed(1)}</div><div class="l">Ore archiviate</div></div>
-  </div>`;
+async function renderArchivio(){
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(200);
+  const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(500);
+  const totOre=(ggs||[]).reduce((a,g)=>a+g.Ore_A+g.Ore_B,0);
 
   const righeB=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
@@ -647,11 +985,16 @@ async function renderArchivio() {
       <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
       <td><strong>${b.OreBattezzate}h</strong></td>
-      <td style="font-size:0.78rem;color:var(--grigio);">${b.Note||'—'}</td>
+      <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
     </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun dato</td></tr>';
 
   document.getElementById('mc').innerHTML=`
-  ${stats}
+  <div class="stats">
+    <div class="stat"><div class="n">${_dips.length}</div><div class="l">Dipendenti</div></div>
+    <div class="stat"><div class="n">${(ggs||[]).length}</div><div class="l">Turni</div></div>
+    <div class="stat"><div class="n">${(bats||[]).length}</div><div class="l">Battesimi</div></div>
+    <div class="stat"><div class="n">${fmtN(totOre,1)}</div><div class="l">Ore totali</div></div>
+  </div>
   <div class="card">
     <div class="ct">Filtri</div>
     <div class="g4">
@@ -676,19 +1019,16 @@ async function filtraArch(){
   const dal=document.getElementById('f-dal')?.value||'';
   const al=document.getElementById('f-al')?.value||'';
   const frep=document.getElementById('f-rep')?.value||'';
-
   let qgg=sb.from('TurniGiornalieri').select('*');
-  if(fd) qgg=qgg.eq('ID_Dipendente',fd);
-  if(dal) qgg=qgg.gte('DataInizio',dal);
-  if(al) qgg=qgg.lte('DataInizio',al);
-  const {data:ggs}=await qgg;
-  const idTurni=(ggs||[]).map(g=>g.ID_Turno);
-  if(!idTurni.length){document.getElementById('tbody-arch').innerHTML='<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';return;}
-
-  let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni);
-  if(frep) qb=qb.eq('ID_Reparto',frep);
-  const {data:bats}=await qb;
-
+  if(fd)qgg=qgg.eq('ID_Dipendente',fd);
+  if(dal)qgg=qgg.gte('DataInizio',dal);
+  if(al)qgg=qgg.lte('DataInizio',al);
+  const{data:ggs}=await qgg;
+  const ids=(ggs||[]).map(g=>g.ID_Turno);
+  if(!ids.length){document.getElementById('tbody-arch').innerHTML='<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';return;}
+  let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',ids);
+  if(frep)qb=qb.eq('ID_Reparto',frep);
+  const{data:bats}=await qb;
   document.getElementById('tbody-arch').innerHTML=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
     return `<tr>
@@ -700,34 +1040,109 @@ async function filtraArch(){
       <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
       <td><strong>${b.OreBattezzate}h</strong></td>
-      <td style="font-size:0.78rem;color:var(--grigio);">${b.Note||'—'}</td>
+      <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
     </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';
 }
 
 // ============================================================
-// TAB: DIPENDENTI
+// TAB: CONFIGURAZIONE
 // ============================================================
-async function renderDipendenti() {
+async function renderConfig(){
+  const{data:utenti}=await sb.from('Utenti').select('*');
   document.getElementById('mc').innerHTML=`
-  <div id="dmsg"></div>
-  <div class="card">
-    <div class="ct">Elenco dipendenti</div>
-    <div class="tw"><table>
-      <thead><tr><th>ID</th><th>Nome</th></tr></thead>
-      <tbody>${_dips.map(d=>`<tr><td><span class="bid">${d.ID_Dipendente}</span></td><td>${d.Nome}</td></tr>`).join('')||'<tr><td colspan="2" class="empty">Nessun dipendente</td></tr>'}</tbody>
-    </table></div>
+  <div class="g2" style="gap:14px;">
+    <div class="card" style="margin:0;">
+      <div class="ct">Gestione utenti</div>
+      <div class="g3" style="margin-bottom:10px;">
+        <div class="fg"><label>Username</label><input id="u-user" type="text"></div>
+        <div class="fg"><label>Password</label><input id="u-pass" type="text"></div>
+        <div class="fg"><label>Ruolo</label>
+          <select id="u-ruolo"><option value="admin">Amministratore</option><option value="responsabile">Responsabile</option></select>
+        </div>
+      </div>
+      <button class="btn bp bsm" onclick="salvaUtente()">+ Aggiungi utente</button>
+      <div style="margin-top:14px;">
+        <table><thead><tr><th>Username</th><th>Ruolo</th><th></th></tr></thead>
+        <tbody>${(utenti||[]).map(u=>`<tr>
+          <td><strong>${u.Username}</strong></td>
+          <td><span class="pill ${u.Ruolo==='admin'?'pg':'py'}">${u.Ruolo}</span></td>
+          <td><button class="btn br bsm" onclick="eliminaUtente('${u.Username}')">✕</button></td>
+        </tr>`).join('')}</tbody></table>
+      </div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="ct">Dipendenti</div>
+      <div class="tw" style="max-height:300px;overflow-y:auto;"><table>
+        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>CodiceVoice</th></tr></thead>
+        <tbody>${_dips.map(d=>`<tr>
+          <td><span class="bid">${d.ID_Dipendente}</span></td>
+          <td>${d.Nome}</td>
+          <td>${nomeCont(d.ID_Contratto)}</td>
+          <td>${nomeLiv(d.ID_Livello)}</td>
+          <td class="mono">${d.CodiceVoice||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="g2" style="gap:14px;margin-top:14px;">
+    <div class="card" style="margin:0;">
+      <div class="ct">Contratti & Tariffe</div>
+      <div class="tw"><table>
+        <thead><tr><th>Contratto</th><th>Tariffa Ord.</th><th>Tariffa Notte</th><th>Tariffa Fest.</th></tr></thead>
+        <tbody id="tbody-contratti"><tr><td colspan="4" class="loading">Caricamento...</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="ct">Costi mezzi per reparto</div>
+      <div class="tw"><table>
+        <thead><tr><th>Reparto</th><th>Costo/giorno</th><th>Dal</th></tr></thead>
+        <tbody id="tbody-mezzi"><tr><td colspan="3" class="loading">Caricamento...</td></tr></tbody>
+      </table></div>
+    </div>
   </div>`;
+
+  // Carica tariffe e mezzi
+  const{data:te}=await sb.from('TariffeEconomia').select('*');
+  document.getElementById('tbody-contratti').innerHTML=(te||[]).map(t=>`<tr>
+    <td><span class="pill pg">${nomeCont(t.ID_Contratto)}</span></td>
+    <td>${fmt€(t.TariffaOrdinaria)}</td>
+    <td>${fmt€(t.TariffaNotturna)}</td>
+    <td>${fmt€(t.TariffaFestiva)}</td>
+  </tr>`).join('')||'<tr><td colspan="4" class="empty">Nessun dato</td></tr>';
+
+  const{data:cm}=await sb.from('CostiMezziReparti').select('*');
+  document.getElementById('tbody-mezzi').innerHTML=(cm||[]).map(c=>`<tr>
+    <td><span class="pill py">${nomeRep(c.ID_Reparto)}</span></td>
+    <td>${fmt€(c.CostoGiornaliero)}</td>
+    <td>${c.DataInizio||'—'}</td>
+  </tr>`).join('')||'<tr><td colspan="3" class="empty">Nessun dato</td></tr>';
+}
+
+async function salvaUtente(){
+  const Username=document.getElementById('u-user').value.trim();
+  const Password=document.getElementById('u-pass').value.trim();
+  const Ruolo=document.getElementById('u-ruolo').value;
+  if(!Username||!Password)return;
+  await sb.from('Utenti').upsert({Username,Password,Ruolo});
+  toast('Utente salvato');showTab('tconf');
+}
+async function eliminaUtente(u){
+  if(u===ME.username){alert('Non puoi eliminare il tuo account.');return;}
+  if(!confirm(`Eliminare utente ${u}?`))return;
+  await sb.from('Utenti').delete().eq('Username',u);
+  toast('Eliminato','warn');showTab('tconf');
 }
 
 // ============================================================
-// TAB: EXPORT
+// TAB: ESPORTA
 // ============================================================
-function renderExport() {
+function renderExport(){
   document.getElementById('mc').innerHTML=`
   <div class="card">
     <div class="ct">Esporta CSV per Microsoft Access</div>
-    <p style="color:var(--grigio);font-size:0.84rem;margin-bottom:14px;line-height:1.6;">
-      Separatore <strong>punto e virgola</strong>, BOM UTF-8. Pronti per importazione in Access.
+    <p style="color:var(--grigio);font-size:0.83rem;margin-bottom:14px;line-height:1.6;">
+      Separatore <strong>punto e virgola (;)</strong> — BOM UTF-8 incluso — compatibile con Access e Excel italiano.
     </p>
     <div class="g2" style="margin-bottom:16px;">
       <div class="fg"><label>Dal (opz.)</label><input id="e-dal" type="date"></div>
@@ -735,14 +1150,20 @@ function renderExport() {
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
       <div class="card" style="margin:0;"><div class="ct">TURNI.csv</div>
-        <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:10px;">ID_Dip, Data, Inizio, Fine, Ore_A, Ore_B</p>
-        <button class="btn ba" onclick="exportCSV('turni')">⬇ Scarica</button></div>
+        <p style="font-size:0.76rem;color:var(--grigio);margin-bottom:10px;">ID_Turno, ID_Dip, Data, Inizio, Fine, Ore_A, Ore_B</p>
+        <button class="btn ba bsm" onclick="exportCSV('turni')">⬇ Scarica</button></div>
       <div class="card" style="margin:0;"><div class="ct">BATTESIMI.csv</div>
-        <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:10px;">ID_Turno, ID_Dip, Data, Ordine, Reparto, Attività, Ore</p>
-        <button class="btn ba" onclick="exportCSV('batt')">⬇ Scarica</button></div>
+        <p style="font-size:0.76rem;color:var(--grigio);margin-bottom:10px;">ID_Bat, ID_Turno, ID_Dip, Data, Reparto, Attività, Ore</p>
+        <button class="btn ba bsm" onclick="exportCSV('batt')">⬇ Scarica</button></div>
+      <div class="card" style="margin:0;"><div class="ct">PRODUZIONE.csv</div>
+        <p style="font-size:0.76rem;color:var(--grigio);margin-bottom:10px;">Data, Reparto, TipoProd, Quantità, Turno</p>
+        <button class="btn ba bsm" onclick="exportCSV('prod')">⬇ Scarica</button></div>
+      <div class="card" style="margin:0;"><div class="ct">PROD_OPERATORI.csv</div>
+        <p style="font-size:0.76rem;color:var(--grigio);margin-bottom:10px;">Data, CodiceVoice, Nome, Attività, Colli</p>
+        <button class="btn ba bsm" onclick="exportCSV('prodop')">⬇ Scarica</button></div>
       <div class="card" style="margin:0;border:2px dashed var(--acc);"><div class="ct">COMPLETO.csv</div>
-        <p style="font-size:0.78rem;color:var(--grigio);margin-bottom:10px;">Tutto unito — una riga per battesimo</p>
-        <button class="btn bp" onclick="exportCSV('all')">⬇ Tutto</button></div>
+        <p style="font-size:0.76rem;color:var(--grigio);margin-bottom:10px;">Tutto unito — una riga per battesimo</p>
+        <button class="btn bp bsm" onclick="exportCSV('all')">⬇ Tutto</button></div>
     </div>
   </div>`;
 }
@@ -751,37 +1172,56 @@ async function exportCSV(tipo){
   const dal=document.getElementById('e-dal')?.value||'';
   const al=document.getElementById('e-al')?.value||'';
   let qgg=sb.from('TurniGiornalieri').select('*').order('DataInizio');
-  if(dal) qgg=qgg.gte('DataInizio',dal);
-  if(al) qgg=qgg.lte('DataInizio',al);
-  const {data:ggs}=await qgg;
-  const {data:bats}=await sb.from('BattesimiTurno').select('*');
+  if(dal)qgg=qgg.gte('DataInizio',dal);
+  if(al)qgg=qgg.lte('DataInizio',al);
+  const{data:ggs}=await qgg;
+  const{data:bats}=await sb.from('BattesimiTurno').select('*');
+  const{data:prods}=await sb.from('ProduzioneReparti').select('*');
+  const{data:prodOp}=await sb.from('ProduzioneOperatori').select('*');
   let csv='',nome='';
+
   if(tipo==='turni'){
     nome='TURNI.csv';
     csv='ID_Turno;ID_Dipendente;Nome;DataInizio;OraInizio;OraFine;Ore_A;Ore_B\n';
     csv+=(ggs||[]).map(g=>[g.ID_Turno,g.ID_Dipendente,nomeDip(g.ID_Dipendente),g.DataInizio,g.OraInizio||'',g.OraFine||'',g.Ore_A||0,g.Ore_B||0].join(';')).join('\n');
   } else if(tipo==='batt'){
     nome='BATTESIMI.csv';
-    csv='ID_Battesimo;ID_Turno;ID_Dipendente;Nome;Data;OrdineRiga;ID_Reparto;NomeReparto;ID_Attivita;NomeAttivita;OreBattezzate;Note\n';
+    csv='ID_Battesimo;ID_Turno;ID_Dipendente;Nome;DataInizio;OrdineRiga;ID_Reparto;NomeReparto;ID_Attivita;NomeAttivita;OreBattezzate;Note\n';
     csv+=(bats||[]).map(b=>{
       const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
-      if(g&&dal&&g.DataInizio<dal) return null;
-      if(g&&al&&g.DataInizio>al) return null;
-      return [b.ID_Battesimo||b.id,b.ID_Turno,g?.ID_Dipendente||'',nomeDip(g?.ID_Dipendente),g?.DataInizio||'',b.OrdineRiga,b.ID_Reparto,nomeRep(b.ID_Reparto),b.ID_Attivita,nomeAtt(b.ID_Attivita),b.OreBattezzate,b.Note||''].join(';');
+      if(dal&&g?.DataInizio<dal)return null;
+      if(al&&g?.DataInizio>al)return null;
+      return [b.ID_Battesimo,b.ID_Turno,g?.ID_Dipendente||'',nomeDip(g?.ID_Dipendente),g?.DataInizio||'',b.OrdineRiga,b.ID_Reparto,nomeRep(b.ID_Reparto),b.ID_Attivita,nomeAtt(b.ID_Attivita),b.OreBattezzate,b.Note||''].join(';');
     }).filter(Boolean).join('\n');
+  } else if(tipo==='prod'){
+    nome='PRODUZIONE_REPARTI.csv';
+    csv='DataProduzione;ID_Reparto;NomeReparto;ID_TipoProduzione;TipoProduzione;UnitaMisura;Quantita;Turno\n';
+    const{data:tipi}=await sb.from('TipiProduzione').select('*');
+    csv+=(prods||[]).filter(p=>(!dal||p.DataProduzione>=dal)&&(!al||p.DataProduzione<=al)).map(p=>{
+      const t=tipi?.find(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
+      return [p.DataProduzione,p.ID_Reparto,nomeRep(p.ID_Reparto),p.ID_TipoProduzione,t?.TipoProduzione||'',t?.UnitaMisura||'',p.Quantita,p.Notturno?'Notturno':'Diurno'].join(';');
+    }).join('\n');
+  } else if(tipo==='prodop'){
+    nome='PRODUZIONE_OPERATORI.csv';
+    csv='DataProduzione;CodiceVoice;ID_Dipendente;NomeDipendente;ID_Attivita;NomeAttivita;Colli\n';
+    csv+=(prodOp||[]).filter(p=>(!dal||p.DataProduzione>=dal)&&(!al||p.DataProduzione<=al)).map(p=>{
+      const d=_dips.find(x=>x.CodiceVoice==p.CodiceVoice);
+      return [p.DataProduzione,p.CodiceVoice,d?.ID_Dipendente||'',d?.Nome||'',p.ID_Attivita,nomeAtt(p.ID_Attivita),p.Colli].join(';');
+    }).join('\n');
   } else {
     nome='COMPLETO.csv';
     csv='ID_Battesimo;ID_Turno;ID_Dipendente;Nome;DataInizio;OraInizio;OraFine;Ore_A;Ore_B;OrdineRiga;ID_Reparto;NomeReparto;ID_Attivita;NomeAttivita;OreBattezzate;Note\n';
     csv+=(bats||[]).map(b=>{
       const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
-      if(!g) return null;
-      if(dal&&g.DataInizio<dal) return null;
-      if(al&&g.DataInizio>al) return null;
-      return [b.ID_Battesimo||b.id,b.ID_Turno,g.ID_Dipendente,nomeDip(g.ID_Dipendente),g.DataInizio,g.OraInizio||'',g.OraFine||'',g.Ore_A||0,g.Ore_B||0,b.OrdineRiga,b.ID_Reparto,nomeRep(b.ID_Reparto),b.ID_Attivita,nomeAtt(b.ID_Attivita),b.OreBattezzate,b.Note||''].join(';');
+      if(!g)return null;
+      if(dal&&g.DataInizio<dal)return null;
+      if(al&&g.DataInizio>al)return null;
+      return [b.ID_Battesimo,b.ID_Turno,g.ID_Dipendente,nomeDip(g.ID_Dipendente),g.DataInizio,g.OraInizio||'',g.OraFine||'',g.Ore_A||0,g.Ore_B||0,b.OrdineRiga,b.ID_Reparto,nomeRep(b.ID_Reparto),b.ID_Attivita,nomeAtt(b.ID_Attivita),b.OreBattezzate,b.Note||''].join(';');
     }).filter(Boolean).join('\n');
   }
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;a.click();
+  toast('✔ Download avviato');
 }
 </script>
 </body>
