@@ -815,22 +815,23 @@ async function caricaReport(){
   const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
   const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
 
-  // CALCOLI ORE
-  const totOre=(ggs||[]).reduce((a,g)=>a+g.Ore_A+g.Ore_B,0);
-  const totOreNotte=bats.filter(b=>{
-    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
-    return g&&g.OraInizio>='22:00'||g&&g.OraFine<='06:00'||g&&g.Ore_B>0;
-  }).reduce((a,b)=>a+b.OreBattezzate,0);
+  // CALCOLI ORE — usa i campi dettagliati da Access
+  const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
+  const totOreNotte=(ggs||[]).reduce((a,g)=>a+(g.OreNotte_A||0)+(g.OreNotte_B||0),0);
+  const totOreFestive=(ggs||[]).reduce((a,g)=>a+(g.OreFestive_A||0)+(g.OreFestive_B||0),0);
+  const totOreNotteFestive=(ggs||[]).reduce((a,g)=>a+(g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0),0);
+  const totOreOrdinarie=Math.max(0,totOre-totOreNotte-totOreFestive-totOreNotteFestive);
 
-  // Ore per reparto
+  // Ore per reparto con dettaglio notturne
   const orePerRep={};
   bats.forEach(b=>{
     const k=b.ID_Reparto;
     if(!orePerRep[k])orePerRep[k]={ore:0,oreNotte:0};
     orePerRep[k].ore+=b.OreBattezzate;
+    orePerRep[k].oreNotte+=(b.OreNotturne||0);
   });
 
-  // COSTO LAVORO
+  // COSTO LAVORO — calcolo preciso con 4 tipologie di ore
   let costoTotale=0;
   (ggs||[]).forEach(g=>{
     const d=_dips.find(x=>x.ID_Dipendente==g.ID_Dipendente);
@@ -839,12 +840,15 @@ async function caricaReport(){
     const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=g.DataInizio&&(!x.DataFine||x.DataFine>=g.DataInizio)).sort((a,b)=>b.DataInizio.localeCompare(a.DataInizio))[0];
     const costoBase=lv?.CostoOrarioBase||te?.TariffaOrdinaria||0;
     const cont=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
-    const maggiorNotte=cont?.MaggiorazioneNotturno||0;
-    const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
-    bGG.forEach(b=>{
-      const tariffa=g.Ore_B>0?costoBase*(1+maggiorNotte):costoBase;
-      costoTotale+=b.OreBattezzate*(tariffa||0);
-    });
+    const maggiorN=cont?.MaggiorazioneNotturno||0;
+    const maggiorF=cont?.MaggiorazioneFestivo||0;
+    const maggiorNF=cont?.MaggiorazioneNotteFestivo||0;
+    // Ore ordinarie = totale - notturne - festive - nottefestive
+    const oreOrd=Math.max(0,(g.Ore_A||0)+(g.Ore_B||0)-(g.OreNotte_A||0)-(g.OreNotte_B||0)-(g.OreFestive_A||0)-(g.OreFestive_B||0)-(g.OreNotteFestive_A||0)-(g.OreNotteFestive_B||0));
+    const oreN=(g.OreNotte_A||0)+(g.OreNotte_B||0);
+    const oreF=(g.OreFestive_A||0)+(g.OreFestive_B||0);
+    const oreNF=(g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0);
+    costoTotale+=oreOrd*costoBase + oreN*costoBase*(1+maggiorN) + oreF*costoBase*(1+maggiorF) + oreNF*costoBase*(1+maggiorNF);
   });
 
   // FATTURATO PRODUZIONE
@@ -876,13 +880,22 @@ async function caricaReport(){
       const te=tariffeEco?.filter(x=>x.ID_Contratto==d.ID_Contratto&&x.DataInizio<=g.DataInizio&&(!x.DataFine||x.DataFine>=g.DataInizio)).sort((a,b)=>b.DataInizio.localeCompare(a.DataInizio))[0];
       const costoBase=lv?.CostoOrarioBase||te?.TariffaOrdinaria||0;
       const cont=_contratti.find(x=>x.ID_Contratto==d.ID_Contratto);
-      const maggiorNotte=cont?.MaggiorazioneNotturno||0;
-      const bGG=bats.filter(b=>b.ID_Turno===g.ID_Turno);
-      bGG.forEach(b=>{
-        const tariffa=g.Ore_B>0?costoBase*(1+maggiorNotte):costoBase;
-        orePerDip[g.ID_Dipendente].costo+=b.OreBattezzate*(tariffa||0);
-      });
+      const maggiorN=cont?.MaggiorazioneNotturno||0;
+      const maggiorF=cont?.MaggiorazioneFestivo||0;
+      const maggiorNF=cont?.MaggiorazioneNotteFestivo||0;
+      const oreOrd=Math.max(0,(g.Ore_A||0)+(g.Ore_B||0)-(g.OreNotte_A||0)-(g.OreNotte_B||0)-(g.OreFestive_A||0)-(g.OreFestive_B||0)-(g.OreNotteFestive_A||0)-(g.OreNotteFestive_B||0));
+      const oreN=(g.OreNotte_A||0)+(g.OreNotte_B||0);
+      const oreF=(g.OreFestive_A||0)+(g.OreFestive_B||0);
+      const oreNF=(g.OreNotteFestive_A||0)+(g.OreNotteFestive_B||0);
+      orePerDip[g.ID_Dipendente].costo+=oreOrd*costoBase+oreN*costoBase*(1+maggiorN)+oreF*costoBase*(1+maggiorF)+oreNF*costoBase*(1+maggiorNF);
     }
+  });
+
+  // Aggiunge ore notturne/festive per dipendente
+  (ggs||[]).forEach(g=>{
+    if(!orePerDip[g.ID_Dipendente]) return;
+    orePerDip[g.ID_Dipendente].oreNotte=((orePerDip[g.ID_Dipendente].oreNotte||0)+(g.OreNotte_A||0)+(g.OreNotte_B||0));
+    orePerDip[g.ID_Dipendente].oreFestive=((orePerDip[g.ID_Dipendente].oreFestive||0)+(g.OreFestive_A||0)+(g.OreFestive_B||0));
   });
 
   const righeOrePerDip=Object.entries(orePerDip).sort((a,b)=>b[1].ore-a[1].ore).map(([idDip,v])=>`
@@ -890,16 +903,18 @@ async function caricaReport(){
       <td><span class="bid">${idDip}</span></td>
       <td>${nomeDip(idDip)}</td>
       <td><strong>${fmtN(v.ore)}h</strong></td>
-      <td>${fmtN(v.oreN)}h</td>
+      <td>${fmtN(v.oreNotte||0)}h</td>
+      <td>${fmtN(v.oreFestive||0)}h</td>
       <td>${fmtEuro(v.costo)}</td>
-    </tr>`).join('')||'<tr><td colspan="5" class="empty">Nessun dato</td></tr>';
+    </tr>`).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
 
   // TABELLA ORE PER REPARTO
   const righeOrePerRep=Object.entries(orePerRep).sort((a,b)=>b[1].ore-a[1].ore).map(([idRep,v])=>`
     <tr>
       <td><span class="pill py">${nomeRep(idRep)}</span></td>
       <td><strong>${fmtN(v.ore)}h</strong></td>
-    </tr>`).join('')||'<tr><td colspan="2" class="empty">Nessun dato</td></tr>';
+      <td>${fmtN(v.oreNotte)}h</td>
+    </tr>`).join('')||'<tr><td colspan="3" class="empty">Nessun dato</td></tr>';
 
   // TABELLA PRODUZIONE
   const righeProds=(prods||[]).slice(0,50).map(p=>{
@@ -920,7 +935,7 @@ async function caricaReport(){
     <div class="rep-card rc-blue">
       <div class="rc-title">Ore totali lavorate</div>
       <div class="rc-val">${fmtN(totOre,1)}h</div>
-      <div class="rc-sub">Di cui notturne: ${fmtN(totOreNotte,1)}h</div>
+      <div class="rc-sub">Notte: ${fmtN(totOreNotte,1)}h | Festive: ${fmtN(totOreFestive,1)}h | Notte Fest.: ${fmtN(totOreNotteFestive,1)}h</div>
     </div>
     <div class="rep-card rc-orange">
       <div class="rc-title">Costo lavoro stimato</div>
@@ -948,14 +963,14 @@ async function caricaReport(){
     <div class="card" style="margin:0;">
       <div class="ct">Ore per dipendente</div>
       <div class="tw"><table>
-        <thead><tr><th>ID</th><th>Nome</th><th>Ore Totali</th><th>Ore Notte</th><th>Costo Stimato</th></tr></thead>
+        <thead><tr><th>ID</th><th>Nome</th><th>Ore Totali</th><th>Ore Notte</th><th>Ore Festive</th><th>Costo Stimato</th></tr></thead>
         <tbody>${righeOrePerDip}</tbody>
       </table></div>
     </div>
     <div class="card" style="margin:0;">
       <div class="ct">Ore per reparto</div>
       <div class="tw"><table>
-        <thead><tr><th>Reparto</th><th>Ore Totali</th></tr></thead>
+        <thead><tr><th>Reparto</th><th>Ore Totali</th><th>Ore Notte</th></tr></thead>
         <tbody>${righeOrePerRep}</tbody>
       </table></div>
     </div>
