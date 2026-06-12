@@ -183,7 +183,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore</h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v20</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -886,22 +886,26 @@ async function caricaReport(){
   }
 
   // Carica TUTTI i battesimi dei turni in ordine (senza filtro reparto — serve per timeline)
-  // Carica battesimi per data in blocchi da 1000 fino a esaurimento
+  // Usa keyset pagination su ID_Battesimo: .gt('ID_Battesimo', lastId)
+  // così il filtro DataInizio viene applicato PRIMA del limit, garantendo blocchi completi
   let batsAll=[];
   {
-    let offset=0;
+    let lastId=0;
     while(true){
       let qb=sb.from('BattesimiTurno').select('*')
-        .order('ID_Battesimo')
-        .range(offset,offset+999);
+        .gt('ID_Battesimo',lastId)
+        .order('ID_Battesimo',{ascending:true})
+        .limit(1000);
       if(dal)qb=qb.gte('DataInizio',dal);
       if(al)qb=qb.lte('DataInizio',al);
-      const{data:batch}=await qb;
+      const{data:batch,error:batchErr}=await qb;
+      if(batchErr){console.error('Errore paginazione battesimi:',batchErr);break;}
       if(!batch||batch.length===0)break;
       batsAll=[...batsAll,...batch];
       if(batch.length<1000)break;
-      offset+=1000;
+      lastId=batch[batch.length-1].ID_Battesimo;
     }
+    console.log(`BattesimiTurno caricati: ${batsAll.length}`);
   }
 
   // Tariffe
