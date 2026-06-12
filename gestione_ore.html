@@ -1102,6 +1102,7 @@ async function caricaReport(){
     </tr>`;
   }).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
 
+  cont.innerHTML=`
   <div class="rep-grid">
     <div class="rep-card rc-blue">
       <div class="rc-title">Ore lavorate${frep?' — '+nomeRep(frep):''}</div>
