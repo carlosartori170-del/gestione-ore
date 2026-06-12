@@ -183,7 +183,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v20</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v21</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -237,7 +237,7 @@ function nomeTipoProd(id){const t=_tipiProd.find(x=>x.ID_TipoProduzione==id);ret
 
 async function caricaDatiBase(){
   const[{data:d},{data:r},{data:a},{data:c},{data:l},{data:t}]=await Promise.all([
-    sb.from('Dipendenti').select('*').eq('Attivo',true).order('Nome'),
+    sb.from('Dipendenti').select('*').order('Nome'), // tutti (attivi e non) — serve per report storici
     sb.from('Reparti').select('*').order('NomeReparto'),
     sb.from('Attivita').select('*').order('NomeAttivita'),
     sb.from('Contratti').select('*'),
@@ -311,7 +311,7 @@ async function showTab(id){
 }
 
 // SELECT HELPERS
-function optDips(sel=''){return _dips.map(d=>`<option value="${d.ID_Dipendente}"${d.ID_Dipendente==sel?' selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');}
+function optDips(sel=''){return _dips.filter(d=>d.Attivo).map(d=>`<option value="${d.ID_Dipendente}"${d.ID_Dipendente==sel?' selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');}
 function optReps(sel=''){return _reparti.map(r=>`<option value="${r.ID_Reparto}"${r.ID_Reparto==sel?' selected':''}>${r.NomeReparto}</option>`).join('');}
 function optAtts(idRep='',sel=''){
   const f=idRep?_attivita.filter(a=>a.ID_Reparto==idRep):_attivita;
@@ -1191,7 +1191,7 @@ async function renderArchivio(){
 
   document.getElementById('mc').innerHTML=`
   <div class="stats">
-    <div class="stat"><div class="n">${_dips.length}</div><div class="l">Dipendenti</div></div>
+    <div class="stat"><div class="n">${_dips.filter(d=>d.Attivo).length}</div><div class="l">Dipendenti</div></div>
     <div class="stat"><div class="n">${cntTurni||0}</div><div class="l">Turni</div></div>
     <div class="stat"><div class="n">${cntBats||0}</div><div class="l">Battesimi</div></div>
     <div class="stat"><div class="n">${fmtN(totOre,1)}</div><div class="l">Ore totali</div></div>
