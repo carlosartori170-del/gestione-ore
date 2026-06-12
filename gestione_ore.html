@@ -183,7 +183,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v23</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v24</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1102,22 +1102,6 @@ async function caricaReport(){
     </tr>`;
   }).join('')||'<tr><td colspan="6" class="empty">Nessun dato</td></tr>';
 
-  // DEBUG
-  const oreRep2Raw=(batsAll||[]).filter(b=>b.ID_Reparto==2).reduce((a,b)=>a+(b.OreBattezzate||0),0);
-  const batsRep2=(batsAll||[]).filter(b=>b.ID_Reparto==2).length;
-  const idTurniMancanti=(batsAll||[]).filter(b=>!ggs.find(g=>g.ID_Turno===b.ID_Turno)).length;
-  const dipMancanti=(ggs||[]).filter(g=>!_dips.find(d=>d.ID_Dipendente==g.ID_Dipendente)).map(g=>g.ID_Dipendente).filter((v,i,a)=>a.indexOf(v)===i);
-
-  cont.innerHTML=`
-  <div class="alert awarn" style="font-family:monospace;font-size:0.78rem;line-height:1.8;margin-bottom:14px;">
-    DEBUG &mdash;
-    BattesimiTurno caricati: <strong>${batsAll.length}</strong> |
-    Turni caricati: <strong>${(ggs||[]).length}</strong> |
-    Battesimi Ortofrutta (Rep.2): <strong>${batsRep2}</strong> |
-    Ore Ortofrutta raw (batsAll): <strong>${fmtN(oreRep2Raw,2)}h</strong> |
-    Battesimi senza turno: <strong>${idTurniMancanti}</strong> |
-    Dip. mancanti: <strong>${dipMancanti.length}</strong>${dipMancanti.length?" ["+dipMancanti.join(",")+ "]":""}
-  </div>
   <div class="rep-grid">
     <div class="rep-card rc-blue">
       <div class="rc-title">Ore lavorate${frep?' — '+nomeRep(frep):''}</div>
