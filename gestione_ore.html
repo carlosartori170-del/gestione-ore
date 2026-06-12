@@ -183,7 +183,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v22</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v23</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -874,12 +874,27 @@ async function caricaReport(){
   const dataA=new Date(al||oggi());
   const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
 
-  // Carica turni del periodo (TUTTI i reparti — serve per timeline cronologica)
-  let qgg=sb.from('TurniGiornalieri').select('*');
-  if(dal)qgg=qgg.gte('DataInizio',dal);
-  if(al)qgg=qgg.lte('DataInizio',al);
-  const{data:ggs}=await qgg;
-  const idTurni=(ggs||[]).map(g=>g.ID_Turno);
+  // Carica turni del periodo con paginazione keyset su ID_Turno
+  let ggs=[];
+  {
+    let lastId=0;
+    while(true){
+      let qgg=sb.from('TurniGiornalieri').select('*')
+        .gt('ID_Turno',lastId)
+        .order('ID_Turno',{ascending:true})
+        .limit(1000);
+      if(dal)qgg=qgg.gte('DataInizio',dal);
+      if(al)qgg=qgg.lte('DataInizio',al);
+      const{data:batch,error:batchErr}=await qgg;
+      if(batchErr){console.error('Errore paginazione turni:',batchErr);break;}
+      if(!batch||batch.length===0)break;
+      ggs=[...ggs,...batch];
+      if(batch.length<1000)break;
+      lastId=batch[batch.length-1].ID_Turno;
+    }
+    console.log(`TurniGiornalieri caricati: ${ggs.length}`);
+  }
+  const idTurni=ggs.map(g=>g.ID_Turno);
   if(!idTurni.length){
     cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';
     return;
