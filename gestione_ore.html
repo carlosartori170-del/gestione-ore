@@ -886,8 +886,23 @@ async function caricaReport(){
   }
 
   // Carica TUTTI i battesimi dei turni in ordine (senza filtro reparto — serve per timeline)
-  const{data:batsAll}=await sb.from('BattesimiTurno').select('*')
-    .in('ID_Turno',idTurni).order('ID_Turno').order('OrdineRiga');
+  // Carica battesimi per data in blocchi da 1000
+  let batsAll=[];
+  {
+    let offset=0;
+    while(true){
+      let qb=sb.from('BattesimiTurno').select('*')
+        .order('DataInizio').order('ID_Turno').order('OrdineRiga')
+        .range(offset,offset+999);
+      if(dal)qb=qb.gte('DataInizio',dal);
+      if(al)qb=qb.lte('DataInizio',al);
+      const{data:batch}=await qb;
+      if(!batch||batch.length===0)break;
+      batsAll=[...batsAll,...batch];
+      if(batch.length<1000)break;
+      offset+=1000;
+    }
+  }
 
   // Tariffe
   const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
