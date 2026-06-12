@@ -886,13 +886,13 @@ async function caricaReport(){
   }
 
   // Carica TUTTI i battesimi dei turni in ordine (senza filtro reparto — serve per timeline)
-  // Carica battesimi per data in blocchi da 1000
+  // Carica battesimi per data in blocchi da 1000 fino a esaurimento
   let batsAll=[];
   {
     let offset=0;
     while(true){
       let qb=sb.from('BattesimiTurno').select('*')
-        .order('DataInizio').order('ID_Turno').order('OrdineRiga')
+        .order('ID_Battesimo')
         .range(offset,offset+999);
       if(dal)qb=qb.gte('DataInizio',dal);
       if(al)qb=qb.lte('DataInizio',al);
