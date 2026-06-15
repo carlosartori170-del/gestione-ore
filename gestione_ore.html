@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v38</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v39</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1909,14 +1909,22 @@ async function avviaImport(){
 
   // Clean turni: exclude null ID_Dipendente or null DataInizio
   const turniPuliti=rawTurni.filter(r=>r.ID_Turno&&r.ID_Dipendente&&r.DataInizio).map(r=>{
-    // Format date as YYYY-MM-DD
+    // Format date as YYYY-MM-DD — usa data locale (non UTC) per evitare sfasamento fuso orario
     let d=r.DataInizio;
-    if(d instanceof Date)d=d.toISOString().slice(0,10);
-    else if(typeof d==='string')d=d.slice(0,10);
-    // Format times
+    if(d instanceof Date){
+      const yy=d.getFullYear();
+      const mm=String(d.getMonth()+1).padStart(2,'0');
+      const dd=String(d.getDate()).padStart(2,'0');
+      d=`${yy}-${mm}-${dd}`;
+    } else if(typeof d==='string')d=d.slice(0,10);
+    // Format times — usa ora locale
     const fmtTime=(t)=>{
       if(!t)return null;
-      if(t instanceof Date)return t.toTimeString().slice(0,5);
+      if(t instanceof Date){
+        const hh=String(t.getHours()).padStart(2,'0');
+        const mi=String(t.getMinutes()).padStart(2,'0');
+        return `${hh}:${mi}`;
+      }
       return String(t).slice(0,5);
     };
     return {
