@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v31</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v32</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -927,67 +927,52 @@ async function caricaReport(){
   const dataA=new Date(al||oggi());
   const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
 
-  // Carica turni del periodo con paginazione keyset su ID_Turno
-  let ggs=[];
+  // Carica turni+battesimi con FK join embedded + tariffe in parallelo
+  cont.innerHTML='<div class="loading">⏳ Caricamento dati...</div>';
+  let ggs=[], batsAll=[];
   {
     let lastId=0;
     while(true){
-      let qgg=sb.from('TurniGiornalieri').select('*')
+      let q=sb.from('TurniGiornalieri')
+        .select('*, BattesimiTurno(*)')
         .gt('ID_Turno',lastId)
         .order('ID_Turno',{ascending:true})
         .limit(1000);
-      if(dal)qgg=qgg.gte('DataInizio',dal);
-      if(al)qgg=qgg.lte('DataInizio',al);
-      const{data:batch,error:batchErr}=await qgg;
-      if(batchErr){console.error('Errore paginazione turni:',batchErr);break;}
-      if(!batch||batch.length===0)break;
-      ggs=[...ggs,...batch];
+      if(dal)q=q.gte('DataInizio',dal);
+      if(al)q=q.lte('DataInizio',al);
+      const{data:batch,error}=await q;
+      if(error||!batch||!batch.length)break;
+      batch.forEach(t=>{
+        const bats=t.BattesimiTurno||[];
+        delete t.BattesimiTurno;
+        ggs.push(t);
+        bats.forEach(b=>batsAll.push(b));
+      });
       if(batch.length<1000)break;
       lastId=batch[batch.length-1].ID_Turno;
     }
-    console.log(`TurniGiornalieri caricati: ${ggs.length}`);
   }
-  const idTurni=ggs.map(g=>g.ID_Turno);
-  if(!idTurni.length){
-    cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';
-    return;
-  }
-
-  // Carica TUTTI i battesimi dei turni in ordine (senza filtro reparto — serve per timeline)
-  // Usa keyset pagination su ID_Battesimo: .gt('ID_Battesimo', lastId)
-  // così il filtro DataInizio viene applicato PRIMA del limit, garantendo blocchi completi
-  // Carica battesimi solo per i turni del periodo (filtra per ID_Turno, non per DataInizio)
-  let batsAll=[];
-  {
-    // Carica in blocchi da ID_Turno per evitare query .in() troppo lunghe
-    const chunkSize=200;
-    for(let i=0;i<idTurni.length;i+=chunkSize){
-      const chunk=idTurni.slice(i,i+chunkSize);
-      const{data:batch,error:batchErr}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk);
-      if(batchErr){console.error('Errore caricamento battesimi:',batchErr);break;}
-      if(batch&&batch.length)batsAll=[...batsAll,...batch];
+  // Fallback se FK join non supportata
+  if(ggs.length>0&&batsAll.length===0){
+    const idTurni=ggs.map(g=>g.ID_Turno);
+    for(let i=0;i<idTurni.length;i+=500){
+      const{data:b}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni.slice(i,i+500));
+      if(b&&b.length)batsAll=[...batsAll,...b];
     }
-    console.log(`BattesimiTurno caricati: ${batsAll.length}`);
   }
+  if(!ggs.length){cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';return;}
+  console.log(`Turni:${ggs.length} Battesimi:${batsAll.length}`);
 
-
-  // Tariffe
-  const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
-  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
-  const{data:costiMezzi}=await sb.from('CostiMezziReparti').select('*');
-
-  // Produzione reparti
-  let qpr=sb.from('ProduzioneReparti').select('*');
-  if(dal)qpr=qpr.gte('DataProduzione',dal);
-  if(al)qpr=qpr.lte('DataProduzione',al);
-  if(frep)qpr=qpr.eq('ID_Reparto',frep);
-  const{data:prods}=await qpr;
-
-  // Produzione operatori att.15
-  const{data:prodOp}=await sb.from('ProduzioneOperatori').select('*')
-    .gte('DataProduzione',dal||'2020-01-01')
-    .lte('DataProduzione',al||oggi())
-    .eq('ID_Attivita',15);
+  // Tariffe e produzione in parallelo
+  const[
+    {data:tariffeEco},{data:tariffeProd},{data:costiMezzi},{data:prods},{data:prodOp}
+  ]=await Promise.all([
+    sb.from('TariffeEconomia').select('*'),
+    sb.from('TariffeProduzione').select('*'),
+    sb.from('CostiMezziReparti').select('*'),
+    (()=>{let q=sb.from('ProduzioneReparti').select('*');if(dal)q=q.gte('DataProduzione',dal);if(al)q=q.lte('DataProduzione',al);if(frep)q=q.eq('ID_Reparto',frep);return q;})(),
+    sb.from('ProduzioneOperatori').select('*').gte('DataProduzione',dal||'2020-01-01').lte('DataProduzione',al||oggi()).eq('ID_Attivita',15)
+  ]);
 
   // Raggruppa battesimi per turno in ordine cronologico
   const batsByTurno={};
@@ -1035,12 +1020,22 @@ async function caricaReport(){
       (!x.DataFine||x.DataFine>=turno.DataInizio)
     ).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
 
-    // Precalcola tipologie per tutti i battesimi del turno in una sola passata
-    const tipsCache=bats.map((_,idx)=>calcolaOreBattesimoPerTipologia(turno,bats,idx,turno.DataInizio));
+    // Proporziona ore per tipologia dai campi Access già calcolati — veloce e preciso
+    const totTurno=Math.max(0.001,(turno.Ore_A||0)+(turno.Ore_B||0));
+    const oreNotteTurno=(turno.OreNotte_A||0)+(turno.OreNotte_B||0);
+    const oreFestTurno=(turno.OreFestive_A||0)+(turno.OreFestive_B||0);
+    const oreNotteFestTurno=(turno.OreNotteFestive_A||0)+(turno.OreNotteFestive_B||0);
+    const oreOrdTurno=Math.max(0,totTurno-oreNotteTurno-oreFestTurno-oreNotteFestTurno);
 
     bats.forEach((bat,idx)=>{
       const rep=bat.ID_Reparto;
-      const tip=tipsCache[idx];
+      const ratio=(bat.OreBattezzate||0)/totTurno;
+      const tip={
+        ord:  oreOrdTurno*ratio,
+        notte:oreNotteTurno*ratio,
+        fest: oreFestTurno*ratio,
+        notteFest:oreNotteFestTurno*ratio
+      };
 
       // COSTO (tariffa contratto dipendente)
       const costo=tip.ord*costoBase+tip.notte*costoBase*(1+maggiorN)+tip.fest*costoBase*(1+maggiorF)+tip.notteFest*costoBase*(1+maggiorNF);
