@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#14532d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --p:#14532d;--pm:#166534;--pl:#22c55e;--acc:#e8a020;
@@ -183,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v26</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v27</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -284,6 +285,7 @@ const TABS_ADMIN=[
   ['treport',`<svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,'Report'],
   ['ta',`<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,'Archivio'],
   ['tconf',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,'Configurazione'],
+  ['timport',`<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,'Importa'],
   ['texport',`<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,'Esporta']
 ];
 const TABS_RESP=[
@@ -307,6 +309,7 @@ async function showTab(id){
   else if(id==='treport')renderReport();
   else if(id==='ta')renderArchivio();
   else if(id==='tconf')renderConfig();
+  else if(id==='timport')renderImport();
   else if(id==='texport')renderExport();
 }
 
@@ -1703,6 +1706,136 @@ async function eliminaUtente(u){
 }
 
 // ============================================================
+// TAB: IMPORTA
+// ============================================================
+function renderImport(){
+  document.getElementById('mc').innerHTML=`
+  <div class="card" style="border-color:var(--rosso);">
+    <div class="ct" style="color:var(--rosso);">⚠ Importazione da Access — ATTENZIONE</div>
+    <p style="font-size:0.83rem;line-height:1.7;color:var(--grigio);margin-bottom:12px;">
+      Questa operazione <strong>svuota completamente</strong> le tabelle <code>TurniGiornalieri</code> e <code>BattesimiTurno</code>
+      e le reimporta dal file Excel esportato da Access.<br>
+      Vengono escluse automaticamente: righe con <code>ID_Dipendente</code> nullo, righe con <code>DataInizio</code> nulla,
+      battesimi con <code>ID_Reparto=0</code> o <code>ID_Attivita=0</code>.
+    </p>
+    <div class="fg" style="max-width:400px;margin-bottom:14px;">
+      <label>File Excel (IMPORTAZIONE_DA_ACCESS.xlsx)</label>
+      <input type="file" id="imp-file" accept=".xlsx,.xls" style="margin-top:6px;">
+    </div>
+    <button class="btn br" onclick="avviaImport()" style="margin-bottom:8px;">
+      <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Avvia importazione
+    </button>
+    <div id="imp-log" style="font-family:var(--mono);font-size:0.78rem;line-height:1.9;margin-top:14px;"></div>
+  </div>`;
+}
+
+async function avviaImport(){
+  const fileInput=document.getElementById('imp-file');
+  const log=document.getElementById('imp-log');
+  if(!fileInput||!fileInput.files.length){log.innerHTML='<span style="color:var(--rosso);">Seleziona il file Excel.</span>';return;}
+  if(!confirm('ATTENZIONE: questa operazione svuota e reimporta TurniGiornalieri e BattesimiTurno. Continuare?'))return;
+
+  const addLog=(msg,col='')=>{ log.innerHTML+=`<div style="color:${col};">${msg}</div>`; };
+  log.innerHTML='';
+  addLog('📂 Lettura file Excel...');
+
+  // Read Excel with SheetJS
+  const file=fileInput.files[0];
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+
+  // Find sheets
+  const sheetTurni=wb.SheetNames.find(n=>n.toUpperCase().includes('TURNI')&&!n.toUpperCase().includes('BATTESI'));
+  const sheetBats=wb.SheetNames.find(n=>n.toUpperCase().includes('BATTESI'));
+  if(!sheetTurni||!sheetBats){addLog('❌ Fogli non trovati. Verifica che il file abbia i fogli "TBL TURNI" e "TBL BATTESIMI TURNO".','var(--rosso)');return;}
+
+  const rawTurni=XLSX.utils.sheet_to_json(wb.Sheets[sheetTurni],{defval:null});
+  const rawBats=XLSX.utils.sheet_to_json(wb.Sheets[sheetBats],{defval:null});
+  addLog(`📊 Letti: ${rawTurni.length} turni, ${rawBats.length} battesimi`);
+
+  // Clean turni: exclude null ID_Dipendente or null DataInizio
+  const turniPuliti=rawTurni.filter(r=>r.ID_Turno&&r.ID_Dipendente&&r.DataInizio).map(r=>{
+    // Format date as YYYY-MM-DD
+    let d=r.DataInizio;
+    if(d instanceof Date)d=d.toISOString().slice(0,10);
+    else if(typeof d==='string')d=d.slice(0,10);
+    // Format times
+    const fmtTime=(t)=>{
+      if(!t)return null;
+      if(t instanceof Date)return t.toTimeString().slice(0,5);
+      return String(t).slice(0,5);
+    };
+    return {
+      ID_Turno:Number(r.ID_Turno),
+      ID_Dipendente:Number(r.ID_Dipendente),
+      DataInizio:d,
+      OraInizio:fmtTime(r.OraInizio),
+      OraFine:fmtTime(r.OraFine),
+      Ore_A:Number(r.Ore_A)||0,
+      Ore_B:Number(r.Ore_B)||0,
+      OreNotte_A:Number(r.OreNotte_A)||0,
+      OreNotte_B:Number(r.OreNotte_B)||0,
+      OreFestive_A:Number(r.OreFestive_A)||0,
+      OreFestive_B:Number(r.OreFestive_B)||0,
+      OreNotteFestive_A:Number(r.OreNotteFestive_A)||0,
+      OreNotteFestive_B:Number(r.OreNotteFestive_B)||0
+    };
+  });
+
+  // Clean battesimi: exclude ID_Reparto=0 or ID_Attivita=0 or null
+  const batsPuliti=rawBats.filter(r=>r.ID_Battesimo&&r.ID_Turno&&Number(r.ID_Reparto)>0&&Number(r.ID_Attivita)>0).map(r=>({
+    ID_Battesimo:Number(r.ID_Battesimo),
+    ID_Turno:Number(r.ID_Turno),
+    OrdineRiga:Number(r.OrdineRiga)||1,
+    OreBattezzate:Number(r.OreBattezzate)||0,
+    OreNotturne:Number(r.OreNotturne)||0,
+    ID_Reparto:Number(r.ID_Reparto),
+    ID_Attivita:Number(r.ID_Attivita),
+    Note:r.Note||''
+  }));
+
+  const exclTurni=rawTurni.length-turniPuliti.length;
+  const exclBats=rawBats.length-batsPuliti.length;
+  addLog(`🧹 Esclusi: ${exclTurni} turni (ID nullo), ${exclBats} battesimi (reparto/attività 0 o nulli)`,'var(--arancio)');
+  addLog(`✅ Da importare: ${turniPuliti.length} turni, ${batsPuliti.length} battesimi`);
+
+  // STEP 1: Delete BattesimiTurno first (FK dependency)
+  addLog('🗑 Svuotamento BattesimiTurno...');
+  const{error:e1}=await sb.from('BattesimiTurno').delete().gte('ID_Battesimo',0);
+  if(e1){addLog('❌ Errore svuotamento BattesimiTurno: '+e1.message,'var(--rosso)');return;}
+  addLog('✔ BattesimiTurno svuotata','var(--verde)');
+
+  // STEP 2: Delete TurniGiornalieri
+  addLog('🗑 Svuotamento TurniGiornalieri...');
+  const{error:e2}=await sb.from('TurniGiornalieri').delete().gte('ID_Turno',0);
+  if(e2){addLog('❌ Errore svuotamento TurniGiornalieri: '+e2.message,'var(--rosso)');return;}
+  addLog('✔ TurniGiornalieri svuotata','var(--verde)');
+
+  // STEP 3: Insert TurniGiornalieri in chunks of 500
+  addLog('⬆ Importazione turni...');
+  const CHUNK=500;
+  for(let i=0;i<turniPuliti.length;i+=CHUNK){
+    const chunk=turniPuliti.slice(i,i+CHUNK);
+    const{error:e3}=await sb.from('TurniGiornalieri').insert(chunk);
+    if(e3){addLog(`❌ Errore inserimento turni (blocco ${Math.floor(i/CHUNK)+1}): ${e3.message}`,'var(--rosso)');return;}
+    addLog(`  → Turni ${i+1}–${Math.min(i+CHUNK,turniPuliti.length)} inseriti`);
+  }
+  addLog(`✔ ${turniPuliti.length} turni importati`,'var(--verde)');
+
+  // STEP 4: Insert BattesimiTurno in chunks of 500
+  addLog('⬆ Importazione battesimi...');
+  for(let i=0;i<batsPuliti.length;i+=CHUNK){
+    const chunk=batsPuliti.slice(i,i+CHUNK);
+    const{error:e4}=await sb.from('BattesimiTurno').insert(chunk);
+    if(e4){addLog(`❌ Errore inserimento battesimi (blocco ${Math.floor(i/CHUNK)+1}): ${e4.message}`,'var(--rosso)');return;}
+    addLog(`  → Battesimi ${i+1}–${Math.min(i+CHUNK,batsPuliti.length)} inseriti`);
+  }
+  addLog(`✔ ${batsPuliti.length} battesimi importati`,'var(--verde)');
+  addLog('🎉 Importazione completata con successo!','var(--verde)');
+  toast('✔ Importazione completata');
+}
+
 // TAB: ESPORTA
 // ============================================================
 function renderExport(){
