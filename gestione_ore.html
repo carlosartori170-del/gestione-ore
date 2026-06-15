@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v33</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v34</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -950,14 +950,26 @@ async function caricaReport(){
   }
   if(!ggs.length){cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';return;}
 
-  // Step 2: battesimi in parallelo a blocchi da 500
-  const idTurni=ggs.map(g=>g.ID_Turno);
+  // Step 2: battesimi filtrati per range ID_Turno (min/max del periodo) — una sola query keyset
   {
-    const chunkSize=500;
-    const chunks=[];
-    for(let i=0;i<idTurni.length;i+=chunkSize)chunks.push(idTurni.slice(i,i+chunkSize));
-    const results=await Promise.all(chunks.map(chunk=>sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk)));
-    results.forEach(({data})=>{if(data&&data.length)batsAll=[...batsAll,...data];});
+    const idTurni=ggs.map(g=>g.ID_Turno);
+    const minId=Math.min(...idTurni);
+    const maxId=Math.max(...idTurni);
+    const idSet=new Set(idTurni);
+    let lastId=0;
+    while(true){
+      const{data:batch,error}=await sb.from('BattesimiTurno').select('*')
+        .gt('ID_Battesimo',lastId)
+        .gte('ID_Turno',minId)
+        .lte('ID_Turno',maxId)
+        .order('ID_Battesimo',{ascending:true})
+        .limit(1000);
+      if(error||!batch||!batch.length)break;
+      // filtra solo quelli del periodo
+      batch.filter(b=>idSet.has(b.ID_Turno)).forEach(b=>batsAll.push(b));
+      if(batch.length<1000)break;
+      lastId=batch[batch.length-1].ID_Battesimo;
+    }
   }
   console.log(`Turni:${ggs.length} Battesimi:${batsAll.length}`);
 
