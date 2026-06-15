@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v27</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v28</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -946,25 +946,20 @@ async function caricaReport(){
   // Carica TUTTI i battesimi dei turni in ordine (senza filtro reparto — serve per timeline)
   // Usa keyset pagination su ID_Battesimo: .gt('ID_Battesimo', lastId)
   // così il filtro DataInizio viene applicato PRIMA del limit, garantendo blocchi completi
+  // Carica battesimi solo per i turni del periodo (filtra per ID_Turno, non per DataInizio)
   let batsAll=[];
   {
-    let lastId=0;
-    while(true){
-      let qb=sb.from('BattesimiTurno').select('*')
-        .gt('ID_Battesimo',lastId)
-        .order('ID_Battesimo',{ascending:true})
-        .limit(1000);
-      if(dal)qb=qb.gte('DataInizio',dal);
-      if(al)qb=qb.lte('DataInizio',al);
-      const{data:batch,error:batchErr}=await qb;
-      if(batchErr){console.error('Errore paginazione battesimi:',batchErr);break;}
-      if(!batch||batch.length===0)break;
-      batsAll=[...batsAll,...batch];
-      if(batch.length<1000)break;
-      lastId=batch[batch.length-1].ID_Battesimo;
+    // Carica in blocchi da ID_Turno per evitare query .in() troppo lunghe
+    const chunkSize=200;
+    for(let i=0;i<idTurni.length;i+=chunkSize){
+      const chunk=idTurni.slice(i,i+chunkSize);
+      const{data:batch,error:batchErr}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk);
+      if(batchErr){console.error('Errore caricamento battesimi:',batchErr);break;}
+      if(batch&&batch.length)batsAll=[...batsAll,...batch];
     }
     console.log(`BattesimiTurno caricati: ${batsAll.length}`);
   }
+
 
   // Tariffe
   const{data:tariffeEco}=await sb.from('TariffeEconomia').select('*');
