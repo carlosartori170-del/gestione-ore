@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v32</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v33</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -927,14 +927,15 @@ async function caricaReport(){
   const dataA=new Date(al||oggi());
   const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
 
-  // Carica turni+battesimi con FK join embedded + tariffe in parallelo
+  // Carica turni e battesimi separatamente (parallelo) + tariffe
   cont.innerHTML='<div class="loading">⏳ Caricamento dati...</div>';
   let ggs=[], batsAll=[];
+
+  // Step 1: turni con paginazione keyset
   {
     let lastId=0;
     while(true){
-      let q=sb.from('TurniGiornalieri')
-        .select('*, BattesimiTurno(*)')
+      let q=sb.from('TurniGiornalieri').select('*')
         .gt('ID_Turno',lastId)
         .order('ID_Turno',{ascending:true})
         .limit(1000);
@@ -942,25 +943,22 @@ async function caricaReport(){
       if(al)q=q.lte('DataInizio',al);
       const{data:batch,error}=await q;
       if(error||!batch||!batch.length)break;
-      batch.forEach(t=>{
-        const bats=t.BattesimiTurno||[];
-        delete t.BattesimiTurno;
-        ggs.push(t);
-        bats.forEach(b=>batsAll.push(b));
-      });
+      ggs=[...ggs,...batch];
       if(batch.length<1000)break;
       lastId=batch[batch.length-1].ID_Turno;
     }
   }
-  // Fallback se FK join non supportata
-  if(ggs.length>0&&batsAll.length===0){
-    const idTurni=ggs.map(g=>g.ID_Turno);
-    for(let i=0;i<idTurni.length;i+=500){
-      const{data:b}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',idTurni.slice(i,i+500));
-      if(b&&b.length)batsAll=[...batsAll,...b];
-    }
-  }
   if(!ggs.length){cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';return;}
+
+  // Step 2: battesimi in parallelo a blocchi da 500
+  const idTurni=ggs.map(g=>g.ID_Turno);
+  {
+    const chunkSize=500;
+    const chunks=[];
+    for(let i=0;i<idTurni.length;i+=chunkSize)chunks.push(idTurni.slice(i,i+chunkSize));
+    const results=await Promise.all(chunks.map(chunk=>sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk)));
+    results.forEach(({data})=>{if(data&&data.length)batsAll=[...batsAll,...data];});
+  }
   console.log(`Turni:${ggs.length} Battesimi:${batsAll.length}`);
 
   // Tariffe e produzione in parallelo
