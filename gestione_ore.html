@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v29</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v30</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1065,11 +1065,21 @@ async function caricaReport(){
   });
 
   // RICAVO PRODUZIONE (reparti non-economia)
+  // Usa TipoGiorno (Feriale/Festivo) + TipoTurno (Diurno/Notturno) per trovare la tariffa corretta
   let fattProduzione=0;
   (prods||[]).forEach(p=>{
-    const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
+    const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione&&(!x.DataFine||x.DataFine>=p.DataProduzione)&&(!x.DataInizio||x.DataInizio<=p.DataProduzione));
     if(!t||!t.length)return;
-    const tf=t.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t.find(x=>x.TipoTurno==='Tutti')||t[0];
+    const festivo=isFestivo(p.DataProduzione);
+    const tipoGiorno=festivo?'Festivo':'Feriale';
+    const tipoTurno=p.Notturno?'Notturno':'Diurno';
+    // priorità: corrispondenza esatta giorno+turno → giorno+Tutti → Tutti+turno → Tutti+Tutti → primo disponibile
+    const tf=
+      t.find(x=>x.TipoGiorno===tipoGiorno&&x.TipoTurno===tipoTurno)||
+      t.find(x=>x.TipoGiorno===tipoGiorno&&x.TipoTurno==='Tutti')||
+      t.find(x=>x.TipoGiorno==='Tutti'&&x.TipoTurno===tipoTurno)||
+      t.find(x=>x.TipoGiorno==='Tutti'&&x.TipoTurno==='Tutti')||
+      t[0];
     if(!tf)return;
     const val=p.Quantita*tf.Tariffa;
     fattProduzione+=val;
@@ -1129,8 +1139,11 @@ async function caricaReport(){
   </tr>`).join('')||'<tr><td colspan="5" class="empty">Nessun dato</td></tr>';
 
   const righeProds=(prods||[]).slice(0,60).map(p=>{
-    const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
-    const tf=t?.find(x=>x.TipoTurno===(p.Notturno?'Notturno':'Diurno'))||t?.find(x=>x.TipoTurno==='Tutti');
+    const t=tariffeProd?.filter(x=>x.ID_TipoProduzione==p.ID_TipoProduzione&&(!x.DataFine||x.DataFine>=p.DataProduzione)&&(!x.DataInizio||x.DataInizio<=p.DataProduzione));
+    const fest2=isFestivo(p.DataProduzione);
+    const tg2=fest2?'Festivo':'Feriale';
+    const tt2=p.Notturno?'Notturno':'Diurno';
+    const tf=t?.find(x=>x.TipoGiorno===tg2&&x.TipoTurno===tt2)||t?.find(x=>x.TipoGiorno===tg2&&x.TipoTurno==='Tutti')||t?.find(x=>x.TipoGiorno==='Tutti'&&x.TipoTurno===tt2)||t?.find(x=>x.TipoGiorno==='Tutti'&&x.TipoTurno==='Tutti')||t?.[0];
     const val=tf?p.Quantita*tf.Tariffa:0;
     return `<tr>
       <td>${p.DataProduzione}</td>
