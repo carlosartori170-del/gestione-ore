@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v28</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v29</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -283,6 +283,7 @@ const TABS_ADMIN=[
   ['tr',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,'Ore Rapide'],
   ['tprod',`<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,'Produzione'],
   ['treport',`<svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,'Report'],
+  ['tprodreport',`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`,'Rep. Produzione'],
   ['ta',`<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,'Archivio'],
   ['tconf',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,'Configurazione'],
   ['timport',`<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,'Importa'],
@@ -307,6 +308,7 @@ async function showTab(id){
   else if(id==='tr')renderRapido();
   else if(id==='tprod')renderProduzione();
   else if(id==='treport')renderReport();
+  else if(id==='tprodreport')renderReportProduzione();
   else if(id==='ta')renderArchivio();
   else if(id==='tconf')renderConfig();
   else if(id==='timport')renderImport();
@@ -1211,6 +1213,153 @@ async function caricaReport(){
   </div>`;
 }
 
+
+// ============================================================
+// TAB: REPORT PRODUZIONE
+// ============================================================
+async function renderReportProduzione(){
+  const cont=document.getElementById('mc');
+  cont.innerHTML=`
+  <div class="card">
+    <div class="ct">Filtri</div>
+    <div class="g4">
+      <div class="fg"><label>Dal</label><input id="rp-dal" type="date"></div>
+      <div class="fg"><label>Al</label><input id="rp-al" type="date"></div>
+      <div class="fg"><label>Reparto</label><select id="rp-rep"><option value="">Tutti</option>${optReps()}</select></div>
+      <div class="fg"><label>Turno</label><select id="rp-turno"><option value="">Tutti</option><option value="false">Diurno</option><option value="true">Notturno</option></select></div>
+    </div>
+    <div class="brow">
+      <button class="btn bp bsm" onclick="filtraReportProd()">🔍 Filtra</button>
+      <button class="btn bo bsm" onclick="resetFiltriProd()">✕ Reset</button>
+    </div>
+  </div>
+  <div id="rp-results"><div class="empty" style="padding:32px;text-align:center;">Usa i filtri per cercare le produzioni</div></div>`;
+}
+
+async function filtraReportProd(){
+  const dal=document.getElementById('rp-dal')?.value||'';
+  const al=document.getElementById('rp-al')?.value||'';
+  const frep=document.getElementById('rp-rep')?.value||'';
+  const fturno=document.getElementById('rp-turno')?.value||'';
+  const cont=document.getElementById('rp-results');
+  if(!cont)return;
+  cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
+
+  let q=sb.from('ProduzioneReparti').select('*').order('DataProduzione',{ascending:false});
+  if(dal)q=q.gte('DataProduzione',dal);
+  if(al)q=q.lte('DataProduzione',al);
+  if(frep)q=q.eq('ID_Reparto',frep);
+  if(fturno!=='')q=q.eq('Notturno',fturno==='true');
+  const{data:prods,error}=await q;
+
+  if(error){cont.innerHTML=`<div class="alert aerr">${error.message}</div>`;return;}
+  if(!prods||!prods.length){cont.innerHTML='<div class="empty" style="padding:32px;text-align:center;">Nessun risultato</div>';return;}
+
+  // Totali per tipo
+  const totPerTipo={};
+  const totPerRep={};
+  prods.forEach(p=>{
+    const k=nomeTipoProd(p.ID_TipoProduzione);
+    totPerTipo[k]=(totPerTipo[k]||0)+Number(p.Quantita||0);
+    const r=nomeRep(p.ID_Reparto);
+    totPerRep[r]=(totPerRep[r]||0)+Number(p.Quantita||0);
+  });
+
+  const righe=prods.map(p=>`
+    <tr id="rpr-${p.ID_Produzione}">
+      <td>${p.DataProduzione}</td>
+      <td><span class="pill py">${nomeRep(p.ID_Reparto)}</span></td>
+      <td>${nomeTipoProd(p.ID_TipoProduzione)}</td>
+      <td><strong>${Number(p.Quantita).toLocaleString('it-IT')}</strong></td>
+      <td>${p.Notturno?'<span class="pill pv">Notturno</span>':'<span class="pill pb">Diurno</span>'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn bo bsm" onclick="modificaProdRep(${p.ID_Produzione},'${p.DataProduzione}',${p.ID_Reparto},${p.ID_TipoProduzione},${p.Quantita},${p.Notturno})" title="Modifica">✏</button>
+        <button class="btn br bsm" onclick="eliminaProdRepReport(${p.ID_Produzione})" title="Elimina">✕</button>
+      </td>
+    </tr>`).join('');
+
+  const totRighe=Object.entries(totPerTipo).map(([k,v])=>`
+    <tr><td><strong>${k}</strong></td><td><strong>${v.toLocaleString('it-IT')}</strong></td></tr>`).join('');
+
+  cont.innerHTML=`
+  <div class="g2" style="gap:14px;margin-bottom:14px;">
+    <div class="card" style="margin:0;">
+      <div class="ct">Totali per tipo produzione</div>
+      <table><thead><tr><th>Tipo</th><th>Quantità tot.</th></tr></thead>
+      <tbody>${totRighe}</tbody></table>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="ct">Riepilogo</div>
+      <div style="font-size:0.85rem;line-height:2;">
+        Righe trovate: <strong>${prods.length}</strong><br>
+        ${Object.entries(totPerRep).map(([r,v])=>`${r}: <strong>${v.toLocaleString('it-IT')}</strong>`).join('<br>')}
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Produzioni reparti <span style="font-weight:400;font-size:0.78rem;color:var(--grigio);">(${prods.length} righe)</span></div>
+    <div id="rp-edit-msg"></div>
+    <div class="tw"><table>
+      <thead><tr><th>Data</th><th>Reparto</th><th>Tipo</th><th>Quantità</th><th>Turno</th><th></th></tr></thead>
+      <tbody id="rp-tbody">${righe}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function resetFiltriProd(){
+  ['rp-dal','rp-al','rp-rep','rp-turno'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const r=document.getElementById('rp-results');
+  if(r)r.innerHTML='<div class="empty" style="padding:32px;text-align:center;">Usa i filtri per cercare le produzioni</div>';
+}
+
+async function modificaProdRep(id,data,idRep,idTipo,qty,notturno){
+  const tr=document.getElementById('rpr-'+id);
+  if(!tr)return;
+  // sostituisce la riga con form inline
+  tr.innerHTML=`
+    <td><input type="date" id="me-data-${id}" value="${data}" style="width:130px;"></td>
+    <td><select id="me-rep-${id}" onchange="aggMeTipi(${id})"><option value="">—</option>${optReps(idRep)}</select></td>
+    <td><select id="me-tipo-${id}">${optTipiProd(idRep,idTipo)}</select></td>
+    <td><input type="number" id="me-qty-${id}" value="${qty}" min="0" step="1" style="width:100px;"></td>
+    <td><select id="me-turno-${id}">
+      <option value="false" ${!notturno?'selected':''}>Diurno</option>
+      <option value="true" ${notturno?'selected':''}>Notturno</option>
+    </select></td>
+    <td style="display:flex;gap:4px;">
+      <button class="btn bv bsm" onclick="salvaProdRepEdit(${id})">✔</button>
+      <button class="btn bo bsm" onclick="filtraReportProd()">✕</button>
+    </td>`;
+}
+
+function aggMeTipi(id){
+  const rep=document.getElementById('me-rep-'+id)?.value||'';
+  const el=document.getElementById('me-tipo-'+id);
+  if(el)el.innerHTML=optTipiProd(rep);
+}
+
+async function salvaProdRepEdit(id){
+  const msg=document.getElementById('rp-edit-msg');
+  const DataProduzione=document.getElementById('me-data-'+id)?.value;
+  const ID_Reparto=document.getElementById('me-rep-'+id)?.value;
+  const ID_TipoProduzione=document.getElementById('me-tipo-'+id)?.value;
+  const Quantita=parseFloat(document.getElementById('me-qty-'+id)?.value);
+  const Notturno=document.getElementById('me-turno-'+id)?.value==='true';
+  if(!DataProduzione||!ID_Reparto||!ID_TipoProduzione||!Quantita){
+    if(msg)msg.innerHTML='<div class="alert aerr">Compila tutti i campi.</div>';return;
+  }
+  const{error}=await sb.from('ProduzioneReparti').update({DataProduzione,ID_Reparto,ID_TipoProduzione,Quantita,Notturno}).eq('ID_Produzione',id);
+  if(error){if(msg)msg.innerHTML=`<div class="alert aerr">${error.message}</div>`;return;}
+  toast('✔ Produzione aggiornata');
+  filtraReportProd();
+}
+
+async function eliminaProdRepReport(id){
+  if(!confirm('Eliminare questa produzione?'))return;
+  const{error}=await sb.from('ProduzioneReparti').delete().eq('ID_Produzione',id);
+  if(error){toast('Errore eliminazione','err');return;}
+  toast('Eliminato','warn');
+  filtraReportProd();
+}
 
 // ============================================================
 // TAB: ARCHIVIO
