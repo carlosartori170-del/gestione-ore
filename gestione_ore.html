@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v35</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v36</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -927,40 +927,42 @@ async function caricaReport(){
   const dataA=new Date(al||oggi());
   const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
 
-  // Carica turni e battesimi separatamente (parallelo) + tariffe
+  // Carica dalla view BattesimiConData (join server-side) — una sola query filtrata per data
   cont.innerHTML='<div class="loading">⏳ Caricamento dati...</div>';
-  let ggs=[], batsAll=[];
-
-  // Step 1: turni con paginazione keyset
+  let batsAll=[];
   {
     let lastId=0;
     while(true){
-      let q=sb.from('TurniGiornalieri').select('*')
-        .gt('ID_Turno',lastId)
-        .order('ID_Turno',{ascending:true})
+      let q=sb.from('BattesimiConData')
+        .select('*')
+        .gt('ID_Battesimo',lastId)
+        .order('ID_Battesimo',{ascending:true})
         .limit(1000);
       if(dal)q=q.gte('DataInizio',dal);
       if(al)q=q.lte('DataInizio',al);
       const{data:batch,error}=await q;
-      if(error||!batch||!batch.length)break;
-      ggs=[...ggs,...batch];
+      if(error){console.error('Errore BattesimiConData:',error);break;}
+      if(!batch||!batch.length)break;
+      batsAll=[...batsAll,...batch];
       if(batch.length<1000)break;
-      lastId=batch[batch.length-1].ID_Turno;
+      lastId=batch[batch.length-1].ID_Battesimo;
     }
   }
-  if(!ggs.length){cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';return;}
+  if(!batsAll.length){cont.innerHTML='<div class="empty">Nessun turno nel periodo selezionato.</div>';return;}
 
-  // Step 2: battesimi per ID_Turno del periodo — chunk sequenziali da 100
-  // (chunk grandi causano timeout Supabase, chunk piccoli troppo lenti — 100 è il giusto compromesso)
-  {
-    const idTurni=ggs.map(g=>g.ID_Turno);
-    const chunkSize=100;
-    for(let i=0;i<idTurni.length;i+=chunkSize){
-      const chunk=idTurni.slice(i,i+chunkSize);
-      const{data:batch}=await sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk);
-      if(batch&&batch.length)batsAll=[...batsAll,...batch];
-    }
-  }
+  // Ricostruisce ggs (turni unici) e batsByTurno dalla view
+  const turniMap={};
+  batsAll.forEach(b=>{
+    if(!turniMap[b.ID_Turno])turniMap[b.ID_Turno]={
+      ID_Turno:b.ID_Turno, ID_Dipendente:b.ID_Dipendente,
+      DataInizio:b.DataInizio, OraInizio:b.OraInizio, OraFine:b.OraFine,
+      Ore_A:b.Ore_A, Ore_B:b.Ore_B,
+      OreNotte_A:b.OreNotte_A, OreNotte_B:b.OreNotte_B,
+      OreFestive_A:b.OreFestive_A, OreFestive_B:b.OreFestive_B,
+      OreNotteFestive_A:b.OreNotteFestive_A, OreNotteFestive_B:b.OreNotteFestive_B
+    };
+  });
+  const ggs=Object.values(turniMap);
   console.log(`Turni:${ggs.length} Battesimi:${batsAll.length}`);
 
   // Tariffe e produzione in parallelo
