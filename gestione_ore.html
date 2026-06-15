@@ -183,7 +183,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v24</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v25</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -407,7 +407,7 @@ async function renderInserimento(){
       <td class="mono">${g.OraFine||'—'}</td>
       <td>${g.Ore_A||0}h + ${g.Ore_B||0}h</td>
       <td><span class="pill pb">${(bs||[]).length} bat.</span></td>
-      <td><button class="btn br bsm" onclick="eliminaTurno(${g.ID_Turno})">✕</button></td>
+      <td style="display:flex;gap:4px;"><button class="btn bo bsm" onclick="modificaTurno(${g.ID_Turno})" title="Modifica">✏</button><button class="btn br bsm" onclick="eliminaTurno(${g.ID_Turno})" title="Elimina">✕</button></td>
     </tr>`;
   }));
 
@@ -619,6 +619,46 @@ function resetIns(){
   if(cb)cb.style.display='none';if(bav)bav.style.display='block';
   _righe=[];_preBatt=[];
 }
+async function modificaTurno(id){
+  // Carica testata turno
+  const{data:g,error:eg}=await sb.from('TurniGiornalieri').select('*').eq('ID_Turno',id).single();
+  if(eg||!g){toast('Turno non trovato','err');return;}
+  // Carica battesimi esistenti (escludi pre-batt OrdineRiga=99)
+  const{data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',id).order('OrdineRiga');
+  const bsNorm=(bs||[]).filter(b=>b.OrdineRiga!==99);
+
+  // Precompila form testata
+  const ed=document.getElementById('i-dip');
+  const edata=document.getElementById('i-data');
+  const eini=document.getElementById('i-ini');
+  const efin=document.getElementById('i-fin');
+  const msg=document.getElementById('imsg');
+  if(!ed){toast('Apri prima il tab Inserimento','warn');return;}
+  ed.value=g.ID_Dipendente;
+  edata.value=g.DataInizio;
+  eini.value=g.OraInizio||'';
+  efin.value=g.OraFine||'';
+  calcT();
+  await caricaPreAdmin();
+
+  // Precompila righe battesimo (solo righe normali, pre-batt gestiti da caricaPreAdmin)
+  _righe=bsNorm.map(b=>({ID_Reparto:b.ID_Reparto,ID_Attivita:b.ID_Attivita,OreBattezzate:b.OreBattezzate,Note:b.Note||''}));
+  if(!_righe.length)_righe=[{ID_Reparto:'',ID_Attivita:'',OreBattezzate:'',Note:''}];
+
+  // Mostra sezione battesimo
+  const cbatt=document.getElementById('cbatt');
+  const bavanza=document.getElementById('bavanza');
+  if(cbatt)cbatt.style.display='block';
+  if(bavanza)bavanza.style.display='none';
+  renderRighe();aggBar();
+
+  // Avviso
+  if(msg)msg.innerHTML='<div class="alert awarn">⚠ Stai modificando il turno del '+g.DataInizio+' — il salvataggio sostituirà i battesimi esistenti. Le ore totali devono corrispondere agli orari.</div>';
+
+  // Scroll al form
+  document.querySelector('.card').scrollIntoView({behavior:'smooth'});
+}
+
 async function eliminaTurno(id){
   if(!confirm('Eliminare questo turno e tutti i suoi battesimi?'))return;
   await sb.from('BattesimiTurno').delete().eq('ID_Turno',id);
