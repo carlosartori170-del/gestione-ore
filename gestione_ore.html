@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v40</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v41</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -856,7 +856,7 @@ function _dateAddDays(baseStr, days){
 
 // Calcolo algebrico per intersezione intervalli — sostituisce il loop minuto per minuto
 // Stessa precisione, 100x più veloce
-function calcolaOreBattesimoPerTipologia(turno, battesimi_turno_ordinati, idx_battesimo, data_turno){
+function calcolaOreBattesimoPerTipologia(turno, battesimi_turno_ordinati, idx_battesimo, data_turno, periodoDal, periodoAl){
   const oraInizioTurno=turno.OraInizio;
   if(!oraInizioTurno)return calcolaOreBattesimoProporzione(turno,battesimi_turno_ordinati[idx_battesimo]);
 
@@ -889,6 +889,11 @@ function calcolaOreBattesimoPerTipologia(turno, battesimi_turno_ordinati, idx_ba
     if(segS>=segE)continue;
 
     const dateStr=_dateAddDays(data_turno,g);
+
+    // Filtra per data di competenza: include solo ore che cadono nel periodo richiesto
+    if(periodoDal && dateStr<periodoDal)continue;
+    if(periodoAl && dateStr>periodoAl)continue;
+
     const fest=_isFestivoFast(dateStr);
 
     // Minuti notturni in questo giorno: [0, NOTTE_FIN) e [NOTTE_INI, DAY)
@@ -931,8 +936,16 @@ async function caricaReport(){
   const dataA=new Date(al||oggi());
   const numGiorni=Math.max(1,Math.round((dataA-dataD)/(1000*60*60*24))+1);
 
-  // Carica dalla view BattesimiConData (join server-side) — una sola query filtrata per data
+  // Carica dalla view BattesimiConData — allarga il filtro di 2 giorni per catturare
+  // turni che iniziano prima del periodo ma hanno ore che cadono nel periodo (es. turno 30/04 con ore il 01/05)
   cont.innerHTML='<div class="loading">⏳ Caricamento dati...</div>';
+  function addDays(dateStr, days){
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+days);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  const dalExt=dal?addDays(dal,-2):null;  // 2 giorni prima
+  const alExt=al?addDays(al,1):null;       // 1 giorno dopo (turni notturni a cavallo)
   let batsAll=[];
   {
     let lastId=0;
@@ -942,8 +955,8 @@ async function caricaReport(){
         .gt('ID_Battesimo',lastId)
         .order('ID_Battesimo',{ascending:true})
         .limit(1000);
-      if(dal)q=q.gte('DataInizio',dal);
-      if(al)q=q.lte('DataInizio',al);
+      if(dalExt)q=q.gte('DataInizio',dalExt);
+      if(alExt)q=q.lte('DataInizio',alExt);
       const{data:batch,error}=await q;
       if(error){console.error('Errore BattesimiConData:',error);break;}
       if(!batch||!batch.length)break;
@@ -1027,7 +1040,7 @@ async function caricaReport(){
     ).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
 
     // Calcolo algebrico per fascia oraria — preciso per turni multi-reparto
-    const tipsCache=bats.map((_,idx)=>calcolaOreBattesimoPerTipologia(turno,bats,idx,turno.DataInizio));
+    const tipsCache=bats.map((_,idx)=>calcolaOreBattesimoPerTipologia(turno,bats,idx,turno.DataInizio,dal,al));
 
     bats.forEach((bat,idx)=>{
       const rep=bat.ID_Reparto;
@@ -1041,14 +1054,15 @@ async function caricaReport(){
         costoTotale+=costo;
         if(!costoPerReparto[rep])costoPerReparto[rep]={costo:0,ore:0,oreNotte:0,oreFest:0,oreNotteFest:0};
         costoPerReparto[rep].costo+=costo;
-        costoPerReparto[rep].ore+=bat.OreBattezzate||0;
+        const oreNelPeriodo=tip.ord+tip.notte+tip.fest+tip.notteFest; // solo ore che cadono nel periodo
+        costoPerReparto[rep].ore+=oreNelPeriodo;
         costoPerReparto[rep].oreNotte+=tip.notte;
         costoPerReparto[rep].oreFest+=tip.fest;
         costoPerReparto[rep].oreNotteFest+=tip.notteFest;
 
         // Costo per dipendente
         if(!costoPerDipMap[d.ID_Dipendente])costoPerDipMap[d.ID_Dipendente]={nome:d.Nome,ore:0,oreNotte:0,oreFest:0,costo:0};
-        costoPerDipMap[d.ID_Dipendente].ore+=bat.OreBattezzate||0;
+        costoPerDipMap[d.ID_Dipendente].ore+=oreNelPeriodo;
         costoPerDipMap[d.ID_Dipendente].oreNotte+=tip.notte;
         costoPerDipMap[d.ID_Dipendente].oreFest+=tip.fest;
         costoPerDipMap[d.ID_Dipendente].costo+=costo;
