@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v37</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v38</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1022,22 +1022,12 @@ async function caricaReport(){
       (!x.DataFine||x.DataFine>=turno.DataInizio)
     ).sort((a,z)=>z.DataInizio.localeCompare(a.DataInizio))[0];
 
-    // Proporziona ore per tipologia dai campi Access già calcolati — veloce e preciso
-    const totTurno=Math.max(0.001,(turno.Ore_A||0)+(turno.Ore_B||0));
-    const oreNotteTurno=(turno.OreNotte_A||0)+(turno.OreNotte_B||0);
-    const oreFestTurno=(turno.OreFestive_A||0)+(turno.OreFestive_B||0);
-    const oreNotteFestTurno=(turno.OreNotteFestive_A||0)+(turno.OreNotteFestive_B||0);
-    const oreOrdTurno=Math.max(0,totTurno-oreNotteTurno-oreFestTurno-oreNotteFestTurno);
+    // Calcolo algebrico per fascia oraria — preciso per turni multi-reparto
+    const tipsCache=bats.map((_,idx)=>calcolaOreBattesimoPerTipologia(turno,bats,idx,turno.DataInizio));
 
     bats.forEach((bat,idx)=>{
       const rep=bat.ID_Reparto;
-      const ratio=(bat.OreBattezzate||0)/totTurno;
-      const tip={
-        ord:  oreOrdTurno*ratio,
-        notte:oreNotteTurno*ratio,
-        fest: oreFestTurno*ratio,
-        notteFest:oreNotteFestTurno*ratio
-      };
+      const tip=tipsCache[idx];
 
       // COSTO (tariffa contratto dipendente)
       const costo=tip.ord*costoBase+tip.notte*costoBase*(1+maggiorN)+tip.fest*costoBase*(1+maggiorF)+tip.notteFest*costoBase*(1+maggiorNF);
