@@ -183,7 +183,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v25</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v26</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1236,7 +1236,8 @@ async function renderArchivio(){
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
       <td><strong>${b.OreBattezzate}h</strong></td>
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
-    </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun dato</td></tr>';
+      <td><button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button></td>
+    </tr>`;}).join('')||'<tr><td colspan="10" class="empty">Nessun dato</td></tr>';
 
   // Conteggi reali dal database
   const[{count:cntTurni},{count:cntBats}]=await Promise.all([
@@ -1251,6 +1252,12 @@ async function renderArchivio(){
     <div class="stat"><div class="n">${cntBats||0}</div><div class="l">Battesimi</div></div>
     <div class="stat"><div class="n">${fmtN(totOre,1)}</div><div class="l">Ore totali</div></div>
   </div>
+  <div class="card" style="border-color:var(--rosso);">
+    <div class="ct" style="color:var(--rosso);">Pulizia dati</div>
+    <div style="font-size:0.82rem;color:var(--grigio);margin-bottom:10px;">Battesimi con reparto o attività non assegnati (ID=0) — probabilmente inseriti per errore.</div>
+    <button class="btn br bsm" onclick="pulisciBattesimiZero()">🗑 Elimina battesimi con reparto/attività 0</button>
+    <div id="pulizia-msg" style="margin-top:8px;"></div>
+  </div>
   <div class="card">
     <div class="ct">Filtri</div>
     <div class="g4">
@@ -1264,7 +1271,7 @@ async function renderArchivio(){
   <div class="card">
     <div class="ct">Battesimi</div>
     <div class="tw"><table>
-      <thead><tr><th>ID Bat.</th><th>ID Dip</th><th>Nome</th><th>Data</th><th>Riga</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th></tr></thead>
+      <thead><tr><th>ID Bat.</th><th>ID Dip</th><th>Nome</th><th>Data</th><th>Riga</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th><th></th></tr></thead>
       <tbody id="tbody-arch">${righeB}</tbody>
     </table></div>
   </div>`;
@@ -1297,7 +1304,36 @@ async function filtraArch(){
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
       <td><strong>${b.OreBattezzate}h</strong></td>
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
-    </tr>`;}).join('')||'<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';
+      <td><button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button></td>
+    </tr>`;}).join('')||'<tr><td colspan="10" class="empty">Nessun risultato</td></tr>';
+}
+
+// ============================================================
+// MODIFICA DA ARCHIVIO
+// ============================================================
+async function modificaTurnoDaArchivio(idTurno){
+  if(!idTurno){toast('ID turno non trovato','err');return;}
+  // Porta al tab inserimento e avvia modifica
+  showTab('ti');
+  // Attendi rendering del tab
+  await new Promise(r=>setTimeout(r,300));
+  await modificaTurno(idTurno);
+}
+
+async function pulisciBattesimiZero(){
+  const msg=document.getElementById('pulizia-msg');
+  if(!confirm('Eliminare tutti i battesimi con reparto=0 o attività=0? Questa azione non è reversibile.'))return;
+  msg.innerHTML='<div class="alert awarn">Ricerca in corso...</div>';
+  const{data:bats,error}=await sb.from('BattesimiTurno').select('ID_Battesimo,ID_Reparto,ID_Attivita')
+    .or('ID_Reparto.eq.0,ID_Attivita.eq.0');
+  if(error){msg.innerHTML=`<div class="alert aerr">Errore: ${error.message}</div>`;return;}
+  if(!bats||!bats.length){msg.innerHTML='<div class="alert aok">Nessun battesimo con reparto/attività 0 trovato.</div>';return;}
+  const ids=bats.map(b=>b.ID_Battesimo);
+  msg.innerHTML=`<div class="alert awarn">Trovati ${ids.length} battesimi — eliminazione in corso...</div>`;
+  const{error:delErr}=await sb.from('BattesimiTurno').delete().in('ID_Battesimo',ids);
+  if(delErr){msg.innerHTML=`<div class="alert aerr">Errore eliminazione: ${delErr.message}</div>`;return;}
+  msg.innerHTML=`<div class="alert aok">✔ Eliminati ${ids.length} battesimi con reparto/attività 0.</div>`;
+  toast(`✔ Eliminati ${ids.length} battesimi anomali`,'warn');
 }
 
 // ============================================================
