@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v41</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v42</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1638,6 +1638,27 @@ async function renderConfig(){
     </table></div>
   </div>
 
+  <!-- MAGGIORAZIONI CONTRATTI -->
+  <div class="card">
+    <div class="ct">Maggiorazioni contratti</div>
+    <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:14px;">
+      Modifica diretta delle percentuali di maggiorazione per notturno, festivo e notte-festivo. Nessuno storico: il nuovo valore si applica subito a tutti i calcoli, anche retroattivi.
+    </p>
+    <div class="tw"><table>
+      <thead><tr><th>Contratto</th><th>Maggiorazione Notturno</th><th>Maggiorazione Festivo</th><th>Maggiorazione Notte Festivo</th><th></th></tr></thead>
+      <tbody id="tbody-maggiorazioni">${_contratti.map(c=>`<tr>
+        <td><strong>${c.NomeContratto}</strong></td>
+        <td><input type="number" step="0.01" min="0" id="mg-not-${c.ID_Contratto}" value="${c.MaggiorazioneNotturno??0}"
+          style="border:1.5px solid var(--bordo);border-radius:5px;padding:5px 8px;width:90px;font-size:0.84rem;"></td>
+        <td><input type="number" step="0.01" min="0" id="mg-fes-${c.ID_Contratto}" value="${c.MaggiorazioneFestivo??0}"
+          style="border:1.5px solid var(--bordo);border-radius:5px;padding:5px 8px;width:90px;font-size:0.84rem;"></td>
+        <td><input type="number" step="0.01" min="0" id="mg-nf-${c.ID_Contratto}" value="${c.MaggiorazioneNotteFestivo??0}"
+          style="border:1.5px solid var(--bordo);border-radius:5px;padding:5px 8px;width:90px;font-size:0.84rem;"></td>
+        <td><button class="btn bp bsm" onclick="aggiornaMaggiorazioni(${c.ID_Contratto})">Salva</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </div>
+
   <!-- TARIFFE PRODUZIONE -->
   <div class="card">
     <div class="ct">Tariffe produzione</div>
@@ -1823,6 +1844,21 @@ async function aggiornaLivello(id, idContratto, nomeLivello){
   await caricaDatiBase();
   toast('✔ Livello aggiornato con storico');
   caricaTariffe();
+}
+
+async function aggiornaMaggiorazioni(idContratto){
+  const not=parseFloat(document.getElementById('mg-not-'+idContratto).value)||0;
+  const fes=parseFloat(document.getElementById('mg-fes-'+idContratto).value)||0;
+  const nf=parseFloat(document.getElementById('mg-nf-'+idContratto).value)||0;
+  const{error}=await sb.from('Contratti').update({
+    MaggiorazioneNotturno:not,
+    MaggiorazioneFestivo:fes,
+    MaggiorazioneNotteFestivo:nf
+  }).eq('ID_Contratto',idContratto);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  // aggiorna _contratti in memoria così i report successivi usano subito i nuovi valori
+  await caricaDatiBase();
+  toast('✔ Maggiorazioni aggiornate');
 }
 
 async function salvaTariffaProd(){
