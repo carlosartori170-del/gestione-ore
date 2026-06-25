@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v44</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v45</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1556,7 +1556,7 @@ async function eliminaProdRepReport(id){
 // ============================================================
 async function renderArchivio(){
   // Carica solo i dati per le statistiche iniziali (senza limit)
-  // I battesimi filtrati vengono caricati separatamente con filtraArchivio()
+  // I battesimi filtrati vengono caricati separatamente con filtraArch()
   const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,Ore_A,Ore_B').order('DataInizio',{ascending:false});
   const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
   const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(200);
@@ -1589,29 +1589,33 @@ async function renderArchivio(){
     <div class="stat"><div class="n">${cntBats||0}</div><div class="l">Battesimi</div></div>
     <div class="stat"><div class="n">${fmtN(totOre,1)}</div><div class="l">Ore totali</div></div>
   </div>
-  <div class="card" style="border-color:var(--rosso);">
-    <div class="ct" style="color:var(--rosso);">Pulizia dati</div>
-    <div style="font-size:0.82rem;color:var(--grigio);margin-bottom:10px;">Battesimi con reparto o attività non assegnati (ID=0) — probabilmente inseriti per errore.</div>
-    <button class="btn br bsm" onclick="pulisciBattesimiZero()">🗑 Elimina battesimi con reparto/attività 0</button>
-    <div id="pulizia-msg" style="margin-top:8px;"></div>
-  </div>
   <div class="card">
     <div class="ct">Filtri</div>
-    <div class="g4">
+    <div class="g5">
       <div class="fg"><label>Dipendente</label><select id="f-dip"><option value="">Tutti</option>${optDips()}</select></div>
       <div class="fg"><label>Dal</label><input id="f-dal" type="date"></div>
       <div class="fg"><label>Al</label><input id="f-al" type="date"></div>
-      <div class="fg"><label>Reparto</label><select id="f-rep"><option value="">Tutti</option>${optReps()}</select></div>
+      <div class="fg"><label>Reparto</label><select id="f-rep" onchange="aggFiltraAtt()"><option value="">Tutti</option>${optReps()}</select></div>
+      <div class="fg"><label>Attività</label><select id="f-att"><option value="">Tutte</option>${optAtts()}</select></div>
     </div>
     <div class="brow"><button class="btn bp bsm" onclick="filtraArch()">🔍 Filtra</button></div>
   </div>
+  <div id="arch-riepilogo"></div>
+  <div id="arch-economia"></div>
   <div class="card">
     <div class="ct">Battesimi</div>
     <div class="tw"><table>
       <thead><tr><th>ID Bat.</th><th>ID Dip</th><th>Nome</th><th>Data</th><th>Riga</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th><th></th></tr></thead>
       <tbody id="tbody-arch">${righeB}</tbody>
+      <tfoot id="tfoot-arch"></tfoot>
     </table></div>
   </div>`;
+}
+
+function aggFiltraAtt(){
+  const rep=document.getElementById('f-rep')?.value||'';
+  const el=document.getElementById('f-att');
+  if(el)el.innerHTML='<option value="">Tutte</option>'+optAtts(rep);
 }
 
 async function filtraArch(){
@@ -1619,16 +1623,94 @@ async function filtraArch(){
   const dal=document.getElementById('f-dal')?.value||'';
   const al=document.getElementById('f-al')?.value||'';
   const frep=document.getElementById('f-rep')?.value||'';
+  const fatt=document.getElementById('f-att')?.value||'';
   let qgg=sb.from('TurniGiornalieri').select('*');
   if(fd)qgg=qgg.eq('ID_Dipendente',fd);
   if(dal)qgg=qgg.gte('DataInizio',dal);
   if(al)qgg=qgg.lte('DataInizio',al);
   const{data:ggs}=await qgg;
   const ids=(ggs||[]).map(g=>g.ID_Turno);
-  if(!ids.length){document.getElementById('tbody-arch').innerHTML='<tr><td colspan="9" class="empty">Nessun risultato</td></tr>';return;}
+  const riep=document.getElementById('arch-riepilogo');
+  const econDiv=document.getElementById('arch-economia');
+  if(!ids.length){
+    document.getElementById('tbody-arch').innerHTML='<tr><td colspan="10" class="empty">Nessun risultato</td></tr>';
+    document.getElementById('tfoot-arch').innerHTML='';
+    if(riep)riep.innerHTML='';
+    if(econDiv)econDiv.innerHTML='';
+    return;
+  }
   let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',ids);
   if(frep)qb=qb.eq('ID_Reparto',frep);
+  if(fatt)qb=qb.eq('ID_Attivita',fatt);
   const{data:bats}=await qb;
+
+  const totOreFiltrate=(bats||[]).reduce((a,b)=>a+(b.OreBattezzate||0),0);
+
+  // Riepilogo sopra
+  if(riep)riep.innerHTML=`
+  <div class="card" style="margin-bottom:14px;background:var(--sfondo);">
+    <div style="font-size:0.85rem;color:var(--grigio);">Risultati filtrati: <strong>${(bats||[]).length}</strong> battesimi</div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--verde);margin-top:4px;">${fmtN(totOreFiltrate,2)}h <span style="font-size:0.85rem;font-weight:500;color:var(--grigio);">ore totali nel filtro</span></div>
+  </div>`;
+
+  // Riquadro Economia: ore diurne/notturne per data di competenza (fascia 22:00-06:00)
+  // Calcola solo se reparto Economia rientra nei risultati (rep.4) o se nessun filtro reparto attivo
+  const ID_REP_ECONOMIA=4;
+  const batsEconomia=(bats||[]).filter(b=>b.ID_Reparto==ID_REP_ECONOMIA);
+  if(econDiv){
+    if(!batsEconomia.length){
+      econDiv.innerHTML='';
+    } else {
+      let oreDiurne=0, oreNotturne=0;
+      const NOTTE_INI=22*60, NOTTE_FIN=6*60, DAY=24*60;
+      function toMin(hhmm){if(!hhmm)return 0;const[h,m]=(hhmm||'00:00').split(':').map(Number);return h*60+m;}
+      function intersect(a,b,c,d){return Math.max(0,Math.min(b,d)-Math.max(a,c));}
+
+      // Per ogni battesimo Economia, ricostruisce la posizione nel turno e calcola diurno/notturno
+      // riferito esattamente al giorno DataInizio del turno (mezzanotte-24:00 di quel giorno)
+      const batsByTurnoEco={};
+      batsEconomia.forEach(b=>{if(!batsByTurnoEco[b.ID_Turno])batsByTurnoEco[b.ID_Turno]=[];batsByTurnoEco[b.ID_Turno].push(b);});
+      // serve l'ordine cronologico di TUTTI i battesimi del turno (non solo quelli economia) per calcolare l'offset corretto
+      const idTurniEco=Object.keys(batsByTurnoEco).map(Number);
+      const{data:tuttiBatsTurniEco}=await sb.from('BattesimiTurno').select('ID_Turno,OrdineRiga,OreBattezzate,ID_Reparto').in('ID_Turno',idTurniEco);
+      const batsByTurnoCompleti={};
+      (tuttiBatsTurniEco||[]).forEach(b=>{if(!batsByTurnoCompleti[b.ID_Turno])batsByTurnoCompleti[b.ID_Turno]=[];batsByTurnoCompleti[b.ID_Turno].push(b);});
+      Object.values(batsByTurnoCompleti).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
+
+      idTurniEco.forEach(idT=>{
+        const turno=(ggs||[]).find(g=>g.ID_Turno===idT);
+        if(!turno||!turno.OraInizio)return;
+        const tuttiBats=batsByTurnoCompleti[idT]||[];
+        let cur=toMin(turno.OraInizio);
+        const offsets=tuttiBats.map(b=>{const s=cur;cur+=(b.OreBattezzate||0)*60;return{s,e:cur,rep:b.ID_Reparto};});
+        offsets.filter(o=>o.rep==ID_REP_ECONOMIA).forEach(myBat=>{
+          const dayStart=Math.floor(myBat.s/DAY), dayEnd=Math.floor((myBat.e-0.001)/DAY);
+          for(let g=dayStart;g<=dayEnd;g++){
+            const segS=Math.max(myBat.s,g*DAY), segE=Math.min(myBat.e,(g+1)*DAY);
+            if(segS>=segE)continue;
+            // riferito al giorno reale (mezzanotte-24 di quel giorno specifico)
+            const n1s=g*DAY+0, n1e=g*DAY+NOTTE_FIN;
+            const n2s=g*DAY+NOTTE_INI, n2e=(g+1)*DAY;
+            const minNotte=intersect(segS,segE,n1s,n1e)+intersect(segS,segE,n2s,n2e);
+            const minGiorno=(segE-segS)-minNotte;
+            oreNotturne+=minNotte/60; oreDiurne+=minGiorno/60;
+          }
+        });
+      });
+
+      econDiv.innerHTML=`
+      <div class="card" style="margin-bottom:14px;border-color:var(--blu);">
+        <div class="ct" style="color:var(--blu);">⏱ Economia — Ore diurne / notturne</div>
+        <div style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">Calcolate per data di competenza (fascia notturna 22:00–06:00 del giorno di riferimento).</div>
+        <div class="g3">
+          <div><div style="font-size:1.4rem;font-weight:800;color:var(--verde);">${fmtN(oreDiurne,2)}h</div><div style="font-size:0.78rem;color:var(--grigio);">Diurne</div></div>
+          <div><div style="font-size:1.4rem;font-weight:800;color:var(--blu);">${fmtN(oreNotturne,2)}h</div><div style="font-size:0.78rem;color:var(--grigio);">Notturne</div></div>
+          <div><div style="font-size:1.4rem;font-weight:800;">${fmtN(oreDiurne+oreNotturne,2)}h</div><div style="font-size:0.78rem;color:var(--grigio);">Totale Economia</div></div>
+        </div>
+      </div>`;
+    }
+  }
+
   document.getElementById('tbody-arch').innerHTML=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
     return `<tr>
@@ -1643,6 +1725,12 @@ async function filtraArch(){
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
       <td><button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button></td>
     </tr>`;}).join('')||'<tr><td colspan="10" class="empty">Nessun risultato</td></tr>';
+
+  document.getElementById('tfoot-arch').innerHTML=(bats||[]).length?`<tr style="background:var(--sfondo);font-weight:800;">
+    <td colspan="7" style="text-align:right;">TOTALE ORE</td>
+    <td>${fmtN(totOreFiltrate,2)}h</td>
+    <td colspan="2"></td>
+  </tr>`:'';
 }
 
 // ============================================================
@@ -1655,22 +1743,6 @@ async function modificaTurnoDaArchivio(idTurno){
   // Attendi rendering del tab
   await new Promise(r=>setTimeout(r,300));
   await modificaTurno(idTurno);
-}
-
-async function pulisciBattesimiZero(){
-  const msg=document.getElementById('pulizia-msg');
-  if(!confirm('Eliminare tutti i battesimi con reparto=0 o attività=0? Questa azione non è reversibile.'))return;
-  msg.innerHTML='<div class="alert awarn">Ricerca in corso...</div>';
-  const{data:bats,error}=await sb.from('BattesimiTurno').select('ID_Battesimo,ID_Reparto,ID_Attivita')
-    .or('ID_Reparto.eq.0,ID_Attivita.eq.0');
-  if(error){msg.innerHTML=`<div class="alert aerr">Errore: ${error.message}</div>`;return;}
-  if(!bats||!bats.length){msg.innerHTML='<div class="alert aok">Nessun battesimo con reparto/attività 0 trovato.</div>';return;}
-  const ids=bats.map(b=>b.ID_Battesimo);
-  msg.innerHTML=`<div class="alert awarn">Trovati ${ids.length} battesimi — eliminazione in corso...</div>`;
-  const{error:delErr}=await sb.from('BattesimiTurno').delete().in('ID_Battesimo',ids);
-  if(delErr){msg.innerHTML=`<div class="alert aerr">Errore eliminazione: ${delErr.message}</div>`;return;}
-  msg.innerHTML=`<div class="alert aok">✔ Eliminati ${ids.length} battesimi con reparto/attività 0.</div>`;
-  toast(`✔ Eliminati ${ids.length} battesimi anomali`,'warn');
 }
 
 // ============================================================
