@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v46</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v47</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1022,6 +1022,42 @@ function _dateAddDays(baseStr, days){
 
 // Calcolo algebrico per intersezione intervalli — sostituisce il loop minuto per minuto
 // Stessa precisione, 100x più veloce
+// Come calcolaOreBattesimoPerTipologia, ma restituisce il breakdown PER GIORNO
+// (data, oreGiorno=diurne+festive, oreNotte=notturne+notte-festive) invece dei soli totali.
+// Usata dall'Archivio Operativo per il dettaglio giornaliero diurno/notturno.
+function _giorniDelBattesimo(turno, battesimi_turno_ordinati, idx_battesimo){
+  const oraInizioTurno=turno.OraInizio;
+  if(!oraInizioTurno){
+    // fallback: nessun orario, tutto il battesimo viene attribuito a DataInizio del turno
+    const bat=battesimi_turno_ordinati[idx_battesimo];
+    return[{data:turno.DataInizio,oreGiorno:bat?.OreBattezzate||0,oreNotte:0}];
+  }
+  function toMin(hhmm){if(!hhmm)return 0;const[h,m]=(hhmm||'00:00').split(':').map(Number);return h*60+m;}
+  let cur=toMin(oraInizioTurno);
+  const offsets=battesimi_turno_ordinati.map(b=>{const s=cur;cur+=(b.OreBattezzate||0)*60;return{s,e:cur};});
+  const myBat=offsets[idx_battesimo];
+  if(!myBat)return[];
+
+  const NOTTE_INI=22*60, NOTTE_FIN=6*60, DAY=24*60;
+  function intersect(a,b,c,d){return Math.max(0,Math.min(b,d)-Math.max(a,c));}
+
+  const dayStart=Math.floor(myBat.s/DAY);
+  const dayEnd=Math.floor((myBat.e-0.001)/DAY);
+  const risultato=[];
+
+  for(let g=dayStart;g<=dayEnd;g++){
+    const segS=Math.max(myBat.s,g*DAY), segE=Math.min(myBat.e,(g+1)*DAY);
+    if(segS>=segE)continue;
+    const dateStr=_dateAddDays(turno.DataInizio,g);
+    const n1s=g*DAY+0, n1e=g*DAY+NOTTE_FIN;
+    const n2s=g*DAY+NOTTE_INI, n2e=(g+1)*DAY;
+    const minNotte=intersect(segS,segE,n1s,n1e)+intersect(segS,segE,n2s,n2e);
+    const minGiorno=(segE-segS)-minNotte;
+    risultato.push({data:dateStr,oreGiorno:minGiorno/60,oreNotte:minNotte/60});
+  }
+  return risultato;
+}
+
 function calcolaOreBattesimoPerTipologia(turno, battesimi_turno_ordinati, idx_battesimo, data_turno, periodoDal, periodoAl){
   const oraInizioTurno=turno.OraInizio;
   if(!oraInizioTurno)return calcolaOreBattesimoProporzione(turno,battesimi_turno_ordinati[idx_battesimo]);
@@ -1722,15 +1758,25 @@ async function filtraArchivioOperativo(){
   const cont=document.getElementById('ao-content');
   cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
 
-  // Carica turni del periodo (keyset paginato)
+  // Estende il filtro di 2gg prima e 1g dopo per catturare turni a cavallo di mezzanotte
+  // (stesso criterio "data di competenza" usato nel Report)
+  function addDays(dateStr, days){
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+days);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  const dalExt=dal?addDays(dal,-2):null;
+  const alExt=al?addDays(al,1):null;
+
+  // Carica turni (con orari, necessari per il calcolo algebrico delle fasce)
   let ggs=[];
   {
     let lastId=0;
     while(true){
-      let q=sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio')
+      let q=sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,OraInizio,OraFine')
         .gt('ID_Turno',lastId).order('ID_Turno',{ascending:true}).limit(1000);
-      if(dal)q=q.gte('DataInizio',dal);
-      if(al)q=q.lte('DataInizio',al);
+      if(dalExt)q=q.gte('DataInizio',dalExt);
+      if(alExt)q=q.lte('DataInizio',alExt);
       const{data:batch,error}=await q;
       if(error||!batch||!batch.length)break;
       ggs=[...ggs,...batch];
@@ -1740,68 +1786,89 @@ async function filtraArchivioOperativo(){
   }
   if(!ggs.length){cont.innerHTML='<div class="empty">Nessun dato nel periodo selezionato.</div>';return;}
 
-  const dataDelTurno={}, dipDelTurno={};
-  ggs.forEach(g=>{dataDelTurno[g.ID_Turno]=g.DataInizio;dipDelTurno[g.ID_Turno]=g.ID_Dipendente;});
+  const turnoById={};
+  ggs.forEach(g=>turnoById[g.ID_Turno]=g);
   const idTurni=ggs.map(g=>g.ID_Turno);
 
-  // Carica battesimi a blocchi da 500, filtrati per reparto/attività se impostati
-  let batsAll=[];
+  // Carica TUTTI i battesimi dei turni (serve l'ordine completo per calcolare gli offset nel turno)
+  let batsAllTurno=[];
   {
     const chunkSize=500;
     const chunks=[];
     for(let i=0;i<idTurni.length;i+=chunkSize)chunks.push(idTurni.slice(i,i+chunkSize));
-    const results=await Promise.all(chunks.map(chunk=>{
-      let q=sb.from('BattesimiTurno').select('ID_Turno,ID_Reparto,ID_Attivita,OreBattezzate').in('ID_Turno',chunk);
-      if(frep)q=q.eq('ID_Reparto',frep);
-      if(fatt)q=q.eq('ID_Attivita',fatt);
-      return q;
-    }));
-    results.forEach(({data})=>{if(data&&data.length)batsAll=[...batsAll,...data];});
+    const results=await Promise.all(chunks.map(chunk=>
+      sb.from('BattesimiTurno').select('ID_Turno,ID_Reparto,ID_Attivita,OreBattezzate,OrdineRiga').in('ID_Turno',chunk)
+    ));
+    results.forEach(({data})=>{if(data&&data.length)batsAllTurno=[...batsAllTurno,...data];});
   }
+  if(!batsAllTurno.length){cont.innerHTML='<div class="empty">Nessun risultato per i filtri selezionati.</div>';return;}
 
-  if(!batsAll.length){cont.innerHTML='<div class="empty">Nessun risultato per i filtri selezionati.</div>';return;}
+  // Raggruppa per turno in ordine cronologico (necessario per il calcolo algebrico)
+  const batsByTurno={};
+  batsAllTurno.forEach(b=>{if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];batsByTurno[b.ID_Turno].push(b);});
+  Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
 
-  // Aggrega per GIORNO: ore totali, numero battesimi, dipendenti coinvolti (set)
+  // Aggrega per GIORNO: ore diurne/notturne (algebrico, per data di competenza), dipendenti coinvolti
   const perGiorno={};
-  batsAll.forEach(b=>{
-    const data=dataDelTurno[b.ID_Turno];
-    const dip=dipDelTurno[b.ID_Turno];
-    if(!data)return;
-    if(!perGiorno[data])perGiorno[data]={ore:0,nBattesimi:0,dipendenti:new Set()};
-    perGiorno[data].ore+=b.OreBattezzate||0;
-    perGiorno[data].nBattesimi++;
-    if(dip)perGiorno[data].dipendenti.add(dip);
+  Object.entries(batsByTurno).forEach(([idTurnoStr,bats])=>{
+    const turno=turnoById[idTurnoStr];
+    if(!turno)return;
+    bats.forEach((bat,idx)=>{
+      if(frep && bat.ID_Reparto!=frep)return;
+      if(fatt && bat.ID_Attivita!=fatt)return;
+      const giorniCoinvolti=_giorniDelBattesimo(turno,bats,idx);
+      giorniCoinvolti.forEach(({data,oreGiorno,oreNotte})=>{
+        if(dal&&data<dal)return;
+        if(al&&data>al)return;
+        if(!perGiorno[data])perGiorno[data]={diurne:0,notturne:0,dipendenti:new Set()};
+        perGiorno[data].diurne+=oreGiorno;
+        perGiorno[data].notturne+=oreNotte;
+        if(turno.ID_Dipendente)perGiorno[data].dipendenti.add(turno.ID_Dipendente);
+      });
+    });
   });
 
   const giorni=Object.keys(perGiorno).sort();
-  const totOre=giorni.reduce((a,d)=>a+perGiorno[d].ore,0);
-  const totBat=giorni.reduce((a,d)=>a+perGiorno[d].nBattesimi,0);
+  if(!giorni.length){cont.innerHTML='<div class="empty">Nessun risultato per i filtri selezionati.</div>';return;}
+
+  const totDiurne=giorni.reduce((a,d)=>a+perGiorno[d].diurne,0);
+  const totNotturne=giorni.reduce((a,d)=>a+perGiorno[d].notturne,0);
+  const totOre=totDiurne+totNotturne;
+  const tuttiDip=new Set();
+  giorni.forEach(d=>perGiorno[d].dipendenti.forEach(x=>tuttiDip.add(x)));
 
   const righe=giorni.map(d=>{
     const v=perGiorno[d];
+    const tot=v.diurne+v.notturne;
     return `<tr>
       <td>${fmtDataIT(d)}</td>
-      <td><strong>${fmtN(v.ore,2)}h</strong></td>
-      <td>${v.nBattesimi}</td>
+      <td><strong>${fmtN(tot,2)}h</strong></td>
+      <td>${fmtN(v.diurne,2)}h</td>
+      <td>${fmtN(v.notturne,2)}h</td>
       <td>${v.dipendenti.size}</td>
     </tr>`;
   }).join('');
 
   cont.innerHTML=`
   <div class="card" style="margin-bottom:14px;background:var(--sfondo);">
-    <div style="font-size:0.85rem;color:var(--grigio);">Giorni trovati: <strong>${giorni.length}</strong> | Battesimi: <strong>${totBat}</strong></div>
+    <div style="font-size:0.85rem;color:var(--grigio);">Giorni trovati: <strong>${giorni.length}</strong> | Dipendenti coinvolti: <strong>${tuttiDip.size}</strong></div>
     <div style="font-size:1.6rem;font-weight:800;color:var(--verde);margin-top:4px;">${fmtN(totOre,2)}h <span style="font-size:0.85rem;font-weight:500;color:var(--grigio);">ore totali nel periodo</span></div>
+    <div style="font-size:0.95rem;color:var(--grigio);margin-top:6px;">
+      Diurne: <strong style="color:var(--verde);">${fmtN(totDiurne,2)}h</strong> &nbsp;|&nbsp;
+      Notturne: <strong style="color:var(--blu);">${fmtN(totNotturne,2)}h</strong>
+    </div>
   </div>
   <div class="card">
     <div class="ct">Dettaglio per giorno</div>
     <div class="tw"><table>
-      <thead><tr><th>Data</th><th>Ore totali</th><th>Battesimi</th><th>Dipendenti coinvolti</th></tr></thead>
+      <thead><tr><th>Data</th><th>Ore totali</th><th>Ore diurne</th><th>Ore notturne</th><th>Dipendenti coinvolti</th></tr></thead>
       <tbody>${righe}</tbody>
       <tfoot><tr style="background:var(--sfondo);font-weight:800;">
         <td style="text-align:right;">TOTALE</td>
         <td>${fmtN(totOre,2)}h</td>
-        <td>${totBat}</td>
-        <td></td>
+        <td>${fmtN(totDiurne,2)}h</td>
+        <td>${fmtN(totNotturne,2)}h</td>
+        <td>${tuttiDip.size}</td>
       </tr></tfoot>
     </table></div>
   </div>`;
