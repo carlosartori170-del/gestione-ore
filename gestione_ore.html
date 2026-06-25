@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v45</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v46</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -286,13 +286,15 @@ const TABS_ADMIN=[
   ['treport',`<svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,'Report'],
   ['tprodreport',`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`,'Rep. Produzione'],
   ['ta',`<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,'Archivio'],
+  ['taop',`<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,'Archivio Operativo'],
   ['tconf',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,'Configurazione'],
   ['timport',`<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,'Importa'],
   ['texport',`<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,'Esporta']
 ];
 const TABS_RESP=[
   ['tr',`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,'Ore Rapide'],
-  ['topreport',`<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.1-2.8-2.8L7 14"/></svg>`,'Report Operativo']
+  ['topreport',`<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.1-2.8-2.8L7 14"/></svg>`,'Report Operativo'],
+  ['taop',`<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,'Archivio Operativo']
 ];
 
 function buildNav(){
@@ -313,6 +315,7 @@ async function showTab(id){
   else if(id==='treport')renderReport();
   else if(id==='tprodreport')renderReportProduzione();
   else if(id==='ta')renderArchivio();
+  else if(id==='taop')renderArchivioOperativo();
   else if(id==='tconf')renderConfig();
   else if(id==='timport')renderImport();
   else if(id==='texport')renderExport();
@@ -1601,7 +1604,6 @@ async function renderArchivio(){
     <div class="brow"><button class="btn bp bsm" onclick="filtraArch()">🔍 Filtra</button></div>
   </div>
   <div id="arch-riepilogo"></div>
-  <div id="arch-economia"></div>
   <div class="card">
     <div class="ct">Battesimi</div>
     <div class="tw"><table>
@@ -1631,12 +1633,10 @@ async function filtraArch(){
   const{data:ggs}=await qgg;
   const ids=(ggs||[]).map(g=>g.ID_Turno);
   const riep=document.getElementById('arch-riepilogo');
-  const econDiv=document.getElementById('arch-economia');
   if(!ids.length){
     document.getElementById('tbody-arch').innerHTML='<tr><td colspan="10" class="empty">Nessun risultato</td></tr>';
     document.getElementById('tfoot-arch').innerHTML='';
     if(riep)riep.innerHTML='';
-    if(econDiv)econDiv.innerHTML='';
     return;
   }
   let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',ids);
@@ -1652,64 +1652,6 @@ async function filtraArch(){
     <div style="font-size:0.85rem;color:var(--grigio);">Risultati filtrati: <strong>${(bats||[]).length}</strong> battesimi</div>
     <div style="font-size:1.6rem;font-weight:800;color:var(--verde);margin-top:4px;">${fmtN(totOreFiltrate,2)}h <span style="font-size:0.85rem;font-weight:500;color:var(--grigio);">ore totali nel filtro</span></div>
   </div>`;
-
-  // Riquadro Economia: ore diurne/notturne per data di competenza (fascia 22:00-06:00)
-  // Calcola solo se reparto Economia rientra nei risultati (rep.4) o se nessun filtro reparto attivo
-  const ID_REP_ECONOMIA=4;
-  const batsEconomia=(bats||[]).filter(b=>b.ID_Reparto==ID_REP_ECONOMIA);
-  if(econDiv){
-    if(!batsEconomia.length){
-      econDiv.innerHTML='';
-    } else {
-      let oreDiurne=0, oreNotturne=0;
-      const NOTTE_INI=22*60, NOTTE_FIN=6*60, DAY=24*60;
-      function toMin(hhmm){if(!hhmm)return 0;const[h,m]=(hhmm||'00:00').split(':').map(Number);return h*60+m;}
-      function intersect(a,b,c,d){return Math.max(0,Math.min(b,d)-Math.max(a,c));}
-
-      // Per ogni battesimo Economia, ricostruisce la posizione nel turno e calcola diurno/notturno
-      // riferito esattamente al giorno DataInizio del turno (mezzanotte-24:00 di quel giorno)
-      const batsByTurnoEco={};
-      batsEconomia.forEach(b=>{if(!batsByTurnoEco[b.ID_Turno])batsByTurnoEco[b.ID_Turno]=[];batsByTurnoEco[b.ID_Turno].push(b);});
-      // serve l'ordine cronologico di TUTTI i battesimi del turno (non solo quelli economia) per calcolare l'offset corretto
-      const idTurniEco=Object.keys(batsByTurnoEco).map(Number);
-      const{data:tuttiBatsTurniEco}=await sb.from('BattesimiTurno').select('ID_Turno,OrdineRiga,OreBattezzate,ID_Reparto').in('ID_Turno',idTurniEco);
-      const batsByTurnoCompleti={};
-      (tuttiBatsTurniEco||[]).forEach(b=>{if(!batsByTurnoCompleti[b.ID_Turno])batsByTurnoCompleti[b.ID_Turno]=[];batsByTurnoCompleti[b.ID_Turno].push(b);});
-      Object.values(batsByTurnoCompleti).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
-
-      idTurniEco.forEach(idT=>{
-        const turno=(ggs||[]).find(g=>g.ID_Turno===idT);
-        if(!turno||!turno.OraInizio)return;
-        const tuttiBats=batsByTurnoCompleti[idT]||[];
-        let cur=toMin(turno.OraInizio);
-        const offsets=tuttiBats.map(b=>{const s=cur;cur+=(b.OreBattezzate||0)*60;return{s,e:cur,rep:b.ID_Reparto};});
-        offsets.filter(o=>o.rep==ID_REP_ECONOMIA).forEach(myBat=>{
-          const dayStart=Math.floor(myBat.s/DAY), dayEnd=Math.floor((myBat.e-0.001)/DAY);
-          for(let g=dayStart;g<=dayEnd;g++){
-            const segS=Math.max(myBat.s,g*DAY), segE=Math.min(myBat.e,(g+1)*DAY);
-            if(segS>=segE)continue;
-            // riferito al giorno reale (mezzanotte-24 di quel giorno specifico)
-            const n1s=g*DAY+0, n1e=g*DAY+NOTTE_FIN;
-            const n2s=g*DAY+NOTTE_INI, n2e=(g+1)*DAY;
-            const minNotte=intersect(segS,segE,n1s,n1e)+intersect(segS,segE,n2s,n2e);
-            const minGiorno=(segE-segS)-minNotte;
-            oreNotturne+=minNotte/60; oreDiurne+=minGiorno/60;
-          }
-        });
-      });
-
-      econDiv.innerHTML=`
-      <div class="card" style="margin-bottom:14px;border-color:var(--blu);">
-        <div class="ct" style="color:var(--blu);">⏱ Economia — Ore diurne / notturne</div>
-        <div style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">Calcolate per data di competenza (fascia notturna 22:00–06:00 del giorno di riferimento).</div>
-        <div class="g3">
-          <div><div style="font-size:1.4rem;font-weight:800;color:var(--verde);">${fmtN(oreDiurne,2)}h</div><div style="font-size:0.78rem;color:var(--grigio);">Diurne</div></div>
-          <div><div style="font-size:1.4rem;font-weight:800;color:var(--blu);">${fmtN(oreNotturne,2)}h</div><div style="font-size:0.78rem;color:var(--grigio);">Notturne</div></div>
-          <div><div style="font-size:1.4rem;font-weight:800;">${fmtN(oreDiurne+oreNotturne,2)}h</div><div style="font-size:0.78rem;color:var(--grigio);">Totale Economia</div></div>
-        </div>
-      </div>`;
-    }
-  }
 
   document.getElementById('tbody-arch').innerHTML=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
@@ -1743,6 +1685,126 @@ async function modificaTurnoDaArchivio(idTurno){
   // Attendi rendering del tab
   await new Promise(r=>setTimeout(r,300));
   await modificaTurno(idTurno);
+}
+
+// ============================================================
+// TAB: ARCHIVIO OPERATIVO (visibile ad admin e responsabile)
+// Filtra per reparto+attività, mostra ore totali per GIORNO (diurne+notturne insieme)
+// più numero di battesimi e dipendenti coinvolti per ciascun giorno.
+// ============================================================
+async function renderArchivioOperativo(){
+  const mc=document.getElementById('mc');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="ct"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Filtri archivio operativo</div>
+    <div class="g4">
+      <div class="fg"><label>Dal</label><input id="ao-dal" type="date"></div>
+      <div class="fg"><label>Al</label><input id="ao-al" type="date"></div>
+      <div class="fg"><label>Reparto</label><select id="ao-rep" onchange="aggAoAtt()"><option value="">Tutti</option>${optReps()}</select></div>
+      <div class="fg"><label>Attività</label><select id="ao-att"><option value="">Tutte</option>${optAtts()}</select></div>
+    </div>
+    <div class="brow"><button class="btn bp bsm" onclick="filtraArchivioOperativo()">🔍 Filtra</button></div>
+  </div>
+  <div id="ao-content"><div class="empty" style="padding:32px;text-align:center;">Imposta i filtri e clicca "Filtra"</div></div>`;
+}
+
+function aggAoAtt(){
+  const rep=document.getElementById('ao-rep')?.value||'';
+  const el=document.getElementById('ao-att');
+  if(el)el.innerHTML='<option value="">Tutte</option>'+optAtts(rep);
+}
+
+async function filtraArchivioOperativo(){
+  const dal=document.getElementById('ao-dal')?.value||'';
+  const al=document.getElementById('ao-al')?.value||'';
+  const frep=document.getElementById('ao-rep')?.value||'';
+  const fatt=document.getElementById('ao-att')?.value||'';
+  const cont=document.getElementById('ao-content');
+  cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
+
+  // Carica turni del periodo (keyset paginato)
+  let ggs=[];
+  {
+    let lastId=0;
+    while(true){
+      let q=sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio')
+        .gt('ID_Turno',lastId).order('ID_Turno',{ascending:true}).limit(1000);
+      if(dal)q=q.gte('DataInizio',dal);
+      if(al)q=q.lte('DataInizio',al);
+      const{data:batch,error}=await q;
+      if(error||!batch||!batch.length)break;
+      ggs=[...ggs,...batch];
+      if(batch.length<1000)break;
+      lastId=batch[batch.length-1].ID_Turno;
+    }
+  }
+  if(!ggs.length){cont.innerHTML='<div class="empty">Nessun dato nel periodo selezionato.</div>';return;}
+
+  const dataDelTurno={}, dipDelTurno={};
+  ggs.forEach(g=>{dataDelTurno[g.ID_Turno]=g.DataInizio;dipDelTurno[g.ID_Turno]=g.ID_Dipendente;});
+  const idTurni=ggs.map(g=>g.ID_Turno);
+
+  // Carica battesimi a blocchi da 500, filtrati per reparto/attività se impostati
+  let batsAll=[];
+  {
+    const chunkSize=500;
+    const chunks=[];
+    for(let i=0;i<idTurni.length;i+=chunkSize)chunks.push(idTurni.slice(i,i+chunkSize));
+    const results=await Promise.all(chunks.map(chunk=>{
+      let q=sb.from('BattesimiTurno').select('ID_Turno,ID_Reparto,ID_Attivita,OreBattezzate').in('ID_Turno',chunk);
+      if(frep)q=q.eq('ID_Reparto',frep);
+      if(fatt)q=q.eq('ID_Attivita',fatt);
+      return q;
+    }));
+    results.forEach(({data})=>{if(data&&data.length)batsAll=[...batsAll,...data];});
+  }
+
+  if(!batsAll.length){cont.innerHTML='<div class="empty">Nessun risultato per i filtri selezionati.</div>';return;}
+
+  // Aggrega per GIORNO: ore totali, numero battesimi, dipendenti coinvolti (set)
+  const perGiorno={};
+  batsAll.forEach(b=>{
+    const data=dataDelTurno[b.ID_Turno];
+    const dip=dipDelTurno[b.ID_Turno];
+    if(!data)return;
+    if(!perGiorno[data])perGiorno[data]={ore:0,nBattesimi:0,dipendenti:new Set()};
+    perGiorno[data].ore+=b.OreBattezzate||0;
+    perGiorno[data].nBattesimi++;
+    if(dip)perGiorno[data].dipendenti.add(dip);
+  });
+
+  const giorni=Object.keys(perGiorno).sort();
+  const totOre=giorni.reduce((a,d)=>a+perGiorno[d].ore,0);
+  const totBat=giorni.reduce((a,d)=>a+perGiorno[d].nBattesimi,0);
+
+  const righe=giorni.map(d=>{
+    const v=perGiorno[d];
+    return `<tr>
+      <td>${fmtDataIT(d)}</td>
+      <td><strong>${fmtN(v.ore,2)}h</strong></td>
+      <td>${v.nBattesimi}</td>
+      <td>${v.dipendenti.size}</td>
+    </tr>`;
+  }).join('');
+
+  cont.innerHTML=`
+  <div class="card" style="margin-bottom:14px;background:var(--sfondo);">
+    <div style="font-size:0.85rem;color:var(--grigio);">Giorni trovati: <strong>${giorni.length}</strong> | Battesimi: <strong>${totBat}</strong></div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--verde);margin-top:4px;">${fmtN(totOre,2)}h <span style="font-size:0.85rem;font-weight:500;color:var(--grigio);">ore totali nel periodo</span></div>
+  </div>
+  <div class="card">
+    <div class="ct">Dettaglio per giorno</div>
+    <div class="tw"><table>
+      <thead><tr><th>Data</th><th>Ore totali</th><th>Battesimi</th><th>Dipendenti coinvolti</th></tr></thead>
+      <tbody>${righe}</tbody>
+      <tfoot><tr style="background:var(--sfondo);font-weight:800;">
+        <td style="text-align:right;">TOTALE</td>
+        <td>${fmtN(totOre,2)}h</td>
+        <td>${totBat}</td>
+        <td></td>
+      </tr></tfoot>
+    </table></div>
+  </div>`;
 }
 
 // ============================================================
