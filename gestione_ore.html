@@ -198,7 +198,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v50</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v51</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -332,9 +332,20 @@ const NAV_ADMIN=[
   ['texport',ICO.texport,'Esporta']
 ];
 const NAV_RESP=[
-  ['tr',ICO.tr,'Ore Rapide'],
+  {group:'Inserimento Dati',icon:ICO.dropdown,items:[
+    ['ti',ICO.ti,'Inserimento Turni'],
+    ['tprod',ICO.tprod,'Inserimento Produzione'],
+    ['tr',ICO.tr,'Ore Rapide']
+  ]},
   ['topreport',ICO.topreport,'Report Redditività'],
-  ['taop',ICO.taop,'Archivio Operativo']
+  {group:'Archivio',icon:ICO.archivio,items:[
+    ['tprodreport',ICO.tprodreport,'Archivio Produzione'],
+    ['ta',ICO.ta,'Archivio Turni'],
+    ['taop',ICO.taop,'Archivio Operativo']
+  ]},
+  ['tconf',ICO.tconf,'Configurazione'],
+  ['timport',ICO.timport,'Importa'],
+  ['texport',ICO.texport,'Esporta']
 ];
 
 function buildNav(){
@@ -347,27 +358,37 @@ function buildNav(){
     // gruppo dropdown
     const subBtns=it.items.map(([id,icon,label])=>
       `<button id="nb-${id}" onclick="showTab('${id}')">${icon}${label}</button>`).join('');
-    return `<div class="navgroup" onclick="toggleNavGroup(this,event)">
-      <button class="navgroup-trigger" id="ng-${it.group}">${it.icon}${it.group}${ICO.caret}</button>
+    return `<div class="navgroup">
+      <button type="button" class="navgroup-trigger" id="ng-${it.group}">${it.icon}${it.group}${ICO.caret}</button>
       <div class="navgroup-menu">${subBtns}</div>
     </div>`;
   }).join('');
+  // Attacca i listener DOPO aver creato l'HTML (più robusto degli onclick inline per i gruppi)
+  document.querySelectorAll('.navgroup-trigger').forEach(trig=>{
+    trig.addEventListener('click',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const group=trig.closest('.navgroup');
+      const wasOpen=group.classList.contains('open');
+      document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
+      if(!wasOpen)group.classList.add('open');
+    });
+  });
 }
 
-function toggleNavGroup(el,ev){
-  // Click sul trigger (non su una sottovoce): toggle apertura per touch/mobile
-  if(ev.target.closest('.navgroup-trigger')){
-    const wasOpen=el.classList.contains('open');
-    document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
-    if(!wasOpen)el.classList.add('open');
-    ev.stopPropagation();
-  }
-}
+// Chiude tutti i dropdown se si clicca fuori da un .navgroup
 document.addEventListener('click',(e)=>{
-  if(!e.target.closest('.navgroup'))document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
+  if(!e.target.closest('.navgroup')){
+    document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
+  }
 });
 function showFirstTab(){showTab(ME.ruolo==='admin'?'ti':'tr');}
 async function showTab(id){
+  // Blocco di sicurezza: Conto Economico è riservato all'admin
+  if(id==='treport' && ME.ruolo!=='admin'){
+    toast('Accesso non consentito','err');
+    return;
+  }
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
   const nb=document.getElementById('nb-'+id);if(nb)nb.classList.add('on');
   // Se la voce è dentro un dropdown, evidenzia anche il trigger del gruppo
@@ -1949,10 +1970,12 @@ async function filtraArchivioOperativo(){
 // TAB: CONFIGURAZIONE
 // ============================================================
 async function renderConfig(){
-  const{data:utenti}=await sb.from('Utenti').select('*');
+  const isAdmin=ME.ruolo==='admin';
+  const{data:utenti}=isAdmin?await sb.from('Utenti').select('*'):{data:[]};
   const{data:tuttiDips}=await sb.from('Dipendenti').select('*').order('Nome');
-  document.getElementById('mc').innerHTML=`
-  <div class="g2" style="gap:14px;">
+
+  // Sezione Gestione utenti: solo admin
+  const sezioneUtenti=isAdmin?`
     <div class="card" style="margin:0;">
       <div class="ct">Gestione utenti</div>
       <div class="g3" style="margin-bottom:10px;">
@@ -1971,7 +1994,11 @@ async function renderConfig(){
           <td><button class="btn br bsm" onclick="eliminaUtente('${u.Username}')">✕</button></td>
         </tr>`).join('')}</tbody></table>
       </div>
-    </div>
+    </div>`:'';
+
+  document.getElementById('mc').innerHTML=`
+  <div class="${isAdmin?'g2':''}" style="${isAdmin?'gap:14px;':''}">
+    ${sezioneUtenti}
     <div class="card" style="margin:0;">
       <div class="ct">Dipendenti</div>
       <div class="g5" style="margin-bottom:10px;align-items:end;">
@@ -2035,6 +2062,7 @@ async function renderConfig(){
     </table></div>
   </div>
 
+  ${isAdmin?`
   <!-- TARIFFE ECONOMIA -->
   <div class="card" style="margin-top:14px;">
     <div class="ct">
@@ -2133,10 +2161,10 @@ async function renderConfig(){
       <thead><tr><th>Reparto</th><th>Costo/giorno</th><th>Dal</th><th>Al</th><th></th></tr></thead>
       <tbody id="tbody-mezzi"><tr><td colspan="5" class="loading">Caricamento...</td></tr></tbody>
     </table></div>
-  </div>`;
+  </div>`:''}`;
 
-  // Carica tutte le tariffe
-  await caricaTariffe();
+  // Carica tutte le tariffe (solo admin: il responsabile non ha le tabelle nel DOM)
+  if(isAdmin)await caricaTariffe();
 }
 
 async function caricaTariffe(){
