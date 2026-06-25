@@ -62,7 +62,7 @@ nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
 .navgroup-trigger svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;}
 .navgroup-trigger:hover{color:rgba(255,255,255,0.85);}
 .navgroup-trigger.on{color:var(--acc);border-bottom-color:var(--acc);}
-.navgroup-menu{display:none;position:absolute;top:100%;left:0;background:var(--bianco);border:1.5px solid var(--bordo);border-radius:0 0 8px 8px;box-shadow:0 8px 20px rgba(0,0,0,0.18);min-width:220px;flex-direction:column;z-index:60;}
+.navgroup-menu{display:none;position:fixed;background:var(--bianco);border:1.5px solid var(--bordo);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,0.25);min-width:220px;flex-direction:column;z-index:9999;}
 .navgroup-menu button{color:var(--testo);padding:11px 16px;border-bottom:1px solid var(--sfondo);justify-content:flex-start;width:100%;}
 .navgroup-menu button svg{stroke:var(--pm);}
 .navgroup-menu button:hover{background:var(--sfondo);color:var(--pm);}
@@ -198,7 +198,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v51</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v52</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -369,18 +369,30 @@ function buildNav(){
       e.preventDefault();
       e.stopPropagation();
       const group=trig.closest('.navgroup');
+      const menu=group.querySelector('.navgroup-menu');
       const wasOpen=group.classList.contains('open');
       document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
-      if(!wasOpen)group.classList.add('open');
+      if(!wasOpen){
+        // Posiziona il menu con position:fixed calcolato dal bounding rect del trigger
+        // (immune al clipping di nav{overflow-x:auto})
+        const rect=trig.getBoundingClientRect();
+        menu.style.top=rect.bottom+'px';
+        menu.style.left=rect.left+'px';
+        group.classList.add('open');
+      }
     });
   });
 }
 
-// Chiude tutti i dropdown se si clicca fuori da un .navgroup
+// Chiude tutti i dropdown se si clicca fuori da un .navgroup o dal menu stesso (ora fixed, fuori dal nodo navgroup nel layout visivo ma figlio nel DOM)
 document.addEventListener('click',(e)=>{
   if(!e.target.closest('.navgroup')){
     document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
   }
+});
+// Riposiziona/chiude i menu aperti se la finestra viene ridimensionata o si scrolla la nav
+window.addEventListener('resize',()=>{
+  document.querySelectorAll('.navgroup.open').forEach(g=>g.classList.remove('open'));
 });
 function showFirstTab(){showTab(ME.ruolo==='admin'?'ti':'tr');}
 async function showTab(id){
