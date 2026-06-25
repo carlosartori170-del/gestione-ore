@@ -184,7 +184,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v43</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v44</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -2083,10 +2083,10 @@ function renderImport(){
   <div class="card" style="border-color:var(--rosso);">
     <div class="ct" style="color:var(--rosso);">⚠ Importazione da Access — ATTENZIONE</div>
     <p style="font-size:0.83rem;line-height:1.7;color:var(--grigio);margin-bottom:12px;">
-      Questa operazione <strong>svuota completamente</strong> le tabelle <code>TurniGiornalieri</code> e <code>BattesimiTurno</code>
-      e le reimporta dal file Excel esportato da Access.<br>
+      Questa operazione <strong>svuota completamente</strong> le tabelle <code>TurniGiornalieri</code>, <code>BattesimiTurno</code>
+      e <code>ProduzioneReparti</code>, e le reimporta dal file Excel esportato da Access (fogli "TBL TURNI", "TBL BATTESIMI TURNO", "TBL PRODUZIONE REPARTI").<br>
       Vengono escluse automaticamente: righe con <code>ID_Dipendente</code> nullo, righe con <code>DataInizio</code> nulla,
-      battesimi con <code>ID_Reparto=0</code> o <code>ID_Attivita=0</code>.
+      battesimi con <code>ID_Reparto=0</code> o <code>ID_Attivita=0</code>, produzioni con dati nulli.
     </p>
     <div class="fg" style="max-width:400px;margin-bottom:14px;">
       <label>File Excel (IMPORTAZIONE_DA_ACCESS.xlsx)</label>
@@ -2104,7 +2104,7 @@ async function avviaImport(){
   const fileInput=document.getElementById('imp-file');
   const log=document.getElementById('imp-log');
   if(!fileInput||!fileInput.files.length){log.innerHTML='<span style="color:var(--rosso);">Seleziona il file Excel.</span>';return;}
-  if(!confirm('ATTENZIONE: questa operazione svuota e reimporta TurniGiornalieri e BattesimiTurno. Continuare?'))return;
+  if(!confirm('ATTENZIONE: questa operazione svuota e reimporta TurniGiornalieri, BattesimiTurno e ProduzioneReparti. Continuare?'))return;
 
   const addLog=(msg,col='')=>{ log.innerHTML+=`<div style="color:${col};">${msg}</div>`; };
   log.innerHTML='';
@@ -2118,11 +2118,14 @@ async function avviaImport(){
   // Find sheets
   const sheetTurni=wb.SheetNames.find(n=>n.toUpperCase().includes('TURNI')&&!n.toUpperCase().includes('BATTESI'));
   const sheetBats=wb.SheetNames.find(n=>n.toUpperCase().includes('BATTESI'));
+  const sheetProd=wb.SheetNames.find(n=>n.toUpperCase().includes('PRODUZIONE')&&n.toUpperCase().includes('REPART'));
   if(!sheetTurni||!sheetBats){addLog('❌ Fogli non trovati. Verifica che il file abbia i fogli "TBL TURNI" e "TBL BATTESIMI TURNO".','var(--rosso)');return;}
+  if(!sheetProd){addLog('⚠ Foglio "TBL PRODUZIONE REPARTI" non trovato — verrà saltato l\'aggiornamento della produzione.','var(--arancio)');}
 
   const rawTurni=XLSX.utils.sheet_to_json(wb.Sheets[sheetTurni],{defval:null});
   const rawBats=XLSX.utils.sheet_to_json(wb.Sheets[sheetBats],{defval:null});
-  addLog(`📊 Letti: ${rawTurni.length} turni, ${rawBats.length} battesimi`);
+  const rawProd=sheetProd?XLSX.utils.sheet_to_json(wb.Sheets[sheetProd],{defval:null}):[];
+  addLog(`📊 Letti: ${rawTurni.length} turni, ${rawBats.length} battesimi, ${rawProd.length} produzioni`);
 
   // Clean turni: exclude null ID_Dipendente or null DataInizio
   const turniPuliti=rawTurni.filter(r=>r.ID_Turno&&r.ID_Dipendente&&r.DataInizio).map(r=>{
@@ -2173,10 +2176,30 @@ async function avviaImport(){
     Note:r.Note||''
   }));
 
+  // Clean produzione: exclude null ID_Produzione, DataProduzione, ID_Reparto o ID_TipoProduzione
+  const prodPuliti=rawProd.filter(r=>r.ID_Produzione&&r.DataProduzione&&r.ID_Reparto&&r.ID_TipoProduzione).map(r=>{
+    let d=r.DataProduzione;
+    if(d instanceof Date){
+      const yy=d.getFullYear();
+      const mm=String(d.getMonth()+1).padStart(2,'0');
+      const dd=String(d.getDate()).padStart(2,'0');
+      d=`${yy}-${mm}-${dd}`;
+    } else if(typeof d==='string')d=d.slice(0,10);
+    return {
+      ID_Produzione:Number(r.ID_Produzione),
+      DataProduzione:d,
+      ID_Reparto:Number(r.ID_Reparto),
+      ID_TipoProduzione:Number(r.ID_TipoProduzione),
+      Quantita:Number(r.Quantita)||0,
+      Notturno:!!r.Notturno
+    };
+  });
+
   const exclTurni=rawTurni.length-turniPuliti.length;
   const exclBats=rawBats.length-batsPuliti.length;
-  addLog(`🧹 Esclusi: ${exclTurni} turni (ID nullo), ${exclBats} battesimi (reparto/attività 0 o nulli)`,'var(--arancio)');
-  addLog(`✅ Da importare: ${turniPuliti.length} turni, ${batsPuliti.length} battesimi`);
+  const exclProd=rawProd.length-prodPuliti.length;
+  addLog(`🧹 Esclusi: ${exclTurni} turni (ID nullo), ${exclBats} battesimi (reparto/attività 0 o nulli), ${exclProd} produzioni (dati nulli)`,'var(--arancio)');
+  addLog(`✅ Da importare: ${turniPuliti.length} turni, ${batsPuliti.length} battesimi, ${prodPuliti.length} produzioni`);
 
   // STEP 1: Delete BattesimiTurno first (FK dependency)
   addLog('🗑 Svuotamento BattesimiTurno...');
@@ -2210,6 +2233,24 @@ async function avviaImport(){
     addLog(`  → Battesimi ${i+1}–${Math.min(i+CHUNK,batsPuliti.length)} inseriti`);
   }
   addLog(`✔ ${batsPuliti.length} battesimi importati`,'var(--verde)');
+
+  // STEP 5: Svuota e reimporta ProduzioneReparti (solo se il foglio è stato trovato)
+  if(sheetProd){
+    addLog('🗑 Svuotamento ProduzioneReparti...');
+    const{error:e5}=await sb.from('ProduzioneReparti').delete().gte('ID_Produzione',0);
+    if(e5){addLog('❌ Errore svuotamento ProduzioneReparti: '+e5.message,'var(--rosso)');return;}
+    addLog('✔ ProduzioneReparti svuotata','var(--verde)');
+
+    addLog('⬆ Importazione produzione reparti...');
+    for(let i=0;i<prodPuliti.length;i+=CHUNK){
+      const chunk=prodPuliti.slice(i,i+CHUNK);
+      const{error:e6}=await sb.from('ProduzioneReparti').insert(chunk);
+      if(e6){addLog(`❌ Errore inserimento produzione (blocco ${Math.floor(i/CHUNK)+1}): ${e6.message}`,'var(--rosso)');return;}
+      addLog(`  → Produzioni ${i+1}–${Math.min(i+CHUNK,prodPuliti.length)} inserite`);
+    }
+    addLog(`✔ ${prodPuliti.length} produzioni importate`,'var(--verde)');
+  }
+
   addLog('🎉 Importazione completata con successo!','var(--verde)');
   toast('✔ Importazione completata');
 }
