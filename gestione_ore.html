@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v65</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v66</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -579,7 +579,7 @@ document.addEventListener('click',(e)=>{
 // TAB: ORE RAPIDE
 // ============================================================
 async function renderRapido(){
-  const{data:ultimi}=await sb.from('BattesimiPreTurno').select('*').order('created_at',{ascending:false}).limit(30);
+  const{data:ultimi}=await sb.from('BattesimiPreTurno').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('created_at',{ascending:false}).limit(30);
   const righe=(ultimi||[]).map(m=>`
     <tr>
       <td><span class="bmov">PRE-${m.id}</span></td>
@@ -635,7 +635,7 @@ async function salvaRapido(){
   if(!ID_Dipendente||!Data||!ID_Reparto||!ID_Attivita||!OreBattezzate){
     msg.innerHTML='<div class="alert aerr">Compila tutti i campi obbligatori.</div>';return;
   }
-  const{error}=await sb.from('BattesimiPreTurno').insert({ID_Dipendente,Data,ID_Reparto,ID_Attivita,OreBattezzate,Note});
+  const{error}=await sb.from('BattesimiPreTurno').insert({ID_Dipendente,Data,ID_Reparto,ID_Attivita,OreBattezzate,Note,ID_Magazzino:MAGAZZINO_ATTIVO});
   if(error){msg.innerHTML=`<div class="alert aerr">${error.message}</div>`;return;}
   toast('✔ Ore salvate');showTab('tr');
 }
@@ -649,7 +649,7 @@ async function eliminaPreBatt(id){
 // TAB: INSERIMENTO TURNI
 // ============================================================
 async function renderInserimento(){
-  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').order('DataInizio',{ascending:false}).limit(15);
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio',{ascending:false}).limit(15);
   const righeGG=await Promise.all((ggs||[]).map(async g=>{
     const{data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',g.ID_Turno);
     return `<tr>
@@ -743,7 +743,7 @@ async function caricaPreAdmin(){
   const id=document.getElementById('i-dip')?.value;
   const data=document.getElementById('i-data')?.value;
   if(!id||!data)return;
-  const{data:pre}=await sb.from('BattesimiPreTurno').select('*').eq('ID_Dipendente',id).eq('Data',data);
+  const{data:pre}=await sb.from('BattesimiPreTurno').select('*').eq('ID_Dipendente',id).eq('Data',data).eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   _preBatt=pre||[];
   const box=document.getElementById('prebatt-box');
   if(!box)return;
@@ -848,12 +848,12 @@ async function salvaTurno(){
     if(!r.ID_Reparto||!r.ID_Attivita||!r.OreBattezzate){msg.innerHTML=`<div class="alert aerr">Riga ${i+1}: completa tutti i campi.</div>`;return;}
   }
   if(Math.abs(tot-batt)>0.01){msg.innerHTML=`<div class="alert aerr">Ore battezzate (${batt}h) ≠ ore totali (${tot}h). Differenza: ${Math.round((tot-batt)*100)/100}h</div>`;return;}
-  const{data:old}=await sb.from('TurniGiornalieri').select('ID_Turno').eq('ID_Dipendente',ID_Dipendente).eq('DataInizio',DataInizio).single();
+  const{data:old}=await sb.from('TurniGiornalieri').select('ID_Turno').eq('ID_Dipendente',ID_Dipendente).eq('DataInizio',DataInizio).eq('ID_Magazzino',MAGAZZINO_ATTIVO).maybeSingle();
   if(old){
     await sb.from('BattesimiTurno').delete().eq('ID_Turno',old.ID_Turno);
     await sb.from('TurniGiornalieri').delete().eq('ID_Turno',old.ID_Turno);
   }
-  const{data:turno,error:et}=await sb.from('TurniGiornalieri').insert({ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B}).select().single();
+  const{data:turno,error:et}=await sb.from('TurniGiornalieri').insert({ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B,ID_Magazzino:MAGAZZINO_ATTIVO}).select().single();
   if(et){msg.innerHTML=`<div class="alert aerr">${et.message}</div>`;return;}
   for(let i=0;i<_righe.length;i++){
     const r=_righe[i];
@@ -923,7 +923,7 @@ async function eliminaTurno(id){
 // TAB: PRODUZIONE
 // ============================================================
 async function renderProduzione(){
-  const{data:ultimiRep}=await sb.from('ProduzioneReparti').select('*').order('DataProduzione',{ascending:false}).limit(30);
+  const{data:ultimiRep}=await sb.from('ProduzioneReparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataProduzione',{ascending:false}).limit(30);
   const righeRep=(ultimiRep||[]).map(p=>`
     <tr>
       <td>${p.DataProduzione}</td>
@@ -996,7 +996,7 @@ async function salvaProdRep(){
   if(!DataProduzione||!ID_Reparto||!ID_TipoProduzione||!Quantita){
     msg.innerHTML='<div class="alert aerr">Compila tutti i campi.</div>';return;
   }
-  const{error}=await sb.from('ProduzioneReparti').insert({DataProduzione,ID_Reparto,ID_TipoProduzione,Quantita,Notturno});
+  const{error}=await sb.from('ProduzioneReparti').insert({DataProduzione,ID_Reparto,ID_TipoProduzione,Quantita,Notturno,ID_Magazzino:MAGAZZINO_ATTIVO});
   if(error){msg.innerHTML=`<div class="alert aerr">${error.message}</div>`;return;}
   toast('✔ Produzione salvata');showTab('tprod');
 }
@@ -1053,7 +1053,8 @@ async function importaProduzione(e){
         DataProduzione:dataNorm,
         CodiceVoice:parseInt(CodiceVoice),
         ID_Attivita:parseInt(ID_Attivita),
-        Colli:parseFloat(Colli)
+        Colli:parseFloat(Colli),
+        ID_Magazzino:MAGAZZINO_ATTIVO
       });
       if(error)skip++;else ok++;
     }
@@ -1097,6 +1098,7 @@ async function caricaReportOperativo(){
     let lastId=0;
     while(true){
       let q=sb.from('TurniGiornalieri').select('ID_Turno,DataInizio')
+        .eq('ID_Magazzino',MAGAZZINO_ATTIVO)
         .gt('ID_Turno',lastId)
         .order('ID_Turno',{ascending:true})
         .limit(1000);
@@ -1127,13 +1129,13 @@ async function caricaReportOperativo(){
   }
 
   // Carica produzione reparti del periodo (esclude Economia rep.4)
-  let qpr=sb.from('ProduzioneReparti').select('DataProduzione,ID_Reparto,Quantita,ID_TipoProduzione,Notturno').neq('ID_Reparto',4);
+  let qpr=sb.from('ProduzioneReparti').select('DataProduzione,ID_Reparto,Quantita,ID_TipoProduzione,Notturno').eq('ID_Magazzino',MAGAZZINO_ATTIVO).neq('ID_Reparto',4);
   if(dal)qpr=qpr.gte('DataProduzione',dal);
   if(al)qpr=qpr.lte('DataProduzione',al);
   if(frep)qpr=qpr.eq('ID_Reparto',frep);
   const{data:prods}=await qpr;
 
-  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*');
+  const{data:tariffeProd}=await sb.from('TariffeProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
 
   // Aggrega ORE per (data, reparto) — esclude Economia
   const oreMap={}; // key: data|reparto -> ore
@@ -1413,6 +1415,7 @@ async function caricaReport(){
     while(true){
       let q=sb.from('BattesimiConData')
         .select('*')
+        .eq('ID_Magazzino',MAGAZZINO_ATTIVO)
         .gt('ID_Battesimo',lastId)
         .order('ID_Battesimo',{ascending:true})
         .limit(1000);
@@ -1448,10 +1451,10 @@ async function caricaReport(){
     {data:tariffeEco},{data:tariffeProd},{data:costiMezzi},{data:prods},{data:prodOp}
   ]=await Promise.all([
     sb.from('TariffeEconomia').select('*'),
-    sb.from('TariffeProduzione').select('*'),
-    sb.from('CostiMezziReparti').select('*'),
-    (()=>{let q=sb.from('ProduzioneReparti').select('*');if(dal)q=q.gte('DataProduzione',dal);if(al)q=q.lte('DataProduzione',al);if(frep)q=q.eq('ID_Reparto',frep);return q;})(),
-    sb.from('ProduzioneOperatori').select('*').gte('DataProduzione',dal||'2020-01-01').lte('DataProduzione',al||oggi()).eq('ID_Attivita',15)
+    sb.from('TariffeProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO),
+    sb.from('CostiMezziReparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO),
+    (()=>{let q=sb.from('ProduzioneReparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);if(dal)q=q.gte('DataProduzione',dal);if(al)q=q.lte('DataProduzione',al);if(frep)q=q.eq('ID_Reparto',frep);return q;})(),
+    sb.from('ProduzioneOperatori').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).gte('DataProduzione',dal||'2020-01-01').lte('DataProduzione',al||oggi()).eq('ID_Attivita',15)
   ]);
 
   // Raggruppa battesimi per turno in ordine cronologico
@@ -1738,7 +1741,7 @@ async function filtraReportProd(){
   if(!cont)return;
   cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
 
-  let q=sb.from('ProduzioneReparti').select('*').order('DataProduzione',{ascending:false});
+  let q=sb.from('ProduzioneReparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataProduzione',{ascending:false});
   if(dal)q=q.gte('DataProduzione',dal);
   if(al)q=q.lte('DataProduzione',al);
   if(freps.length)q=q.in('ID_Reparto',freps);
@@ -1862,9 +1865,9 @@ async function eliminaProdRepReport(id){
 async function renderArchivio(){
   // Carica solo i dati per le statistiche iniziali (senza limit)
   // I battesimi filtrati vengono caricati separatamente con filtraArch()
-  const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B').order('DataInizio',{ascending:false});
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio',{ascending:false});
   const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
-  const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(200);
+  const{data:bats}=await sb.from('BattesimiTurno').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('ID_Turno',{ascending:false}).limit(200);
 
   const righeB=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
@@ -1888,8 +1891,8 @@ async function renderArchivio(){
 
   // Conteggi reali dal database
   const[{count:cntTurni},{count:cntBats}]=await Promise.all([
-    sb.from('TurniGiornalieri').select('*',{count:'exact',head:true}),
-    sb.from('BattesimiTurno').select('*',{count:'exact',head:true})
+    sb.from('TurniGiornalieri').select('*',{count:'exact',head:true}).eq('ID_Magazzino',MAGAZZINO_ATTIVO),
+    sb.from('BattesimiTurno').select('*',{count:'exact',head:true}).eq('ID_Magazzino',MAGAZZINO_ATTIVO)
   ]);
 
   document.getElementById('mc').innerHTML=`
@@ -1937,7 +1940,7 @@ async function filtraArch(){
   const fatts=getCkValues('f-att-ck'); // array di ID_Attivita selezionati (vuoto = tutte)
   aggCkLabel('f-rep-trigger','f-rep-ck','Tutti');
   aggCkLabel('f-att-trigger','f-att-ck','Tutte');
-  let qgg=sb.from('TurniGiornalieri').select('*');
+  let qgg=sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   if(fd)qgg=qgg.eq('ID_Dipendente',fd);
   if(dal)qgg=qgg.gte('DataInizio',dal);
   if(al)qgg=qgg.lte('DataInizio',al);
@@ -2073,6 +2076,7 @@ async function filtraArchivioOperativo(){
     let lastId=0;
     while(true){
       let q=sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,OraInizio,OraFine')
+        .eq('ID_Magazzino',MAGAZZINO_ATTIVO)
         .gt('ID_Turno',lastId).order('ID_Turno',{ascending:true}).limit(1000);
       if(dalExt)q=q.gte('DataInizio',dalExt);
       if(alExt)q=q.lte('DataInizio',alExt);
@@ -2258,7 +2262,7 @@ async function filtraProduttivitaOperatori(){
   cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
 
   // 1. Colli per dipendente+giorno (da ProduzioneOperatori, collegato via CodiceVoice)
-  let qpo=sb.from('ProduzioneOperatori').select('*');
+  let qpo=sb.from('ProduzioneOperatori').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   if(dal)qpo=qpo.gte('DataProduzione',dal);
   if(al)qpo=qpo.lte('DataProduzione',al);
   const{data:prodOp}=await qpo;
@@ -2270,7 +2274,7 @@ async function filtraProduttivitaOperatori(){
   _dips.forEach(d=>{if(d.CodiceVoice)dipByVoice[d.CodiceVoice]=d;});
 
   // 2. Ore Ventilazione Ortofrutta (att.15) per dipendente+giorno, dalla view già pronta
-  let qb=sb.from('BattesimiConData').select('ID_Dipendente,DataInizio,OreBattezzate').eq('ID_Attivita',15);
+  let qb=sb.from('BattesimiConData').select('ID_Dipendente,DataInizio,OreBattezzate').eq('ID_Attivita',15).eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   if(dal)qb=qb.gte('DataInizio',dal);
   if(al)qb=qb.lte('DataInizio',al);
   let oreAll=[];
@@ -2922,13 +2926,13 @@ async function avviaImport(){
 
   // STEP 1: Delete BattesimiTurno first (FK dependency)
   addLog('🗑 Svuotamento BattesimiTurno...');
-  const{error:e1}=await sb.from('BattesimiTurno').delete().gte('ID_Battesimo',0);
+  const{error:e1}=await sb.from('BattesimiTurno').delete().eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   if(e1){addLog('❌ Errore svuotamento BattesimiTurno: '+e1.message,'var(--rosso)');return;}
   addLog('✔ BattesimiTurno svuotata','var(--verde)');
 
   // STEP 2: Delete TurniGiornalieri
   addLog('🗑 Svuotamento TurniGiornalieri...');
-  const{error:e2}=await sb.from('TurniGiornalieri').delete().gte('ID_Turno',0);
+  const{error:e2}=await sb.from('TurniGiornalieri').delete().eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   if(e2){addLog('❌ Errore svuotamento TurniGiornalieri: '+e2.message,'var(--rosso)');return;}
   addLog('✔ TurniGiornalieri svuotata','var(--verde)');
 
@@ -2956,7 +2960,7 @@ async function avviaImport(){
   // STEP 5: Svuota e reimporta ProduzioneReparti (solo se il foglio è stato trovato)
   if(sheetProd){
     addLog('🗑 Svuotamento ProduzioneReparti...');
-    const{error:e5}=await sb.from('ProduzioneReparti').delete().gte('ID_Produzione',0);
+    const{error:e5}=await sb.from('ProduzioneReparti').delete().eq('ID_Magazzino',MAGAZZINO_ATTIVO);
     if(e5){addLog('❌ Errore svuotamento ProduzioneReparti: '+e5.message,'var(--rosso)');return;}
     addLog('✔ ProduzioneReparti svuotata','var(--verde)');
 
@@ -3010,13 +3014,13 @@ function renderExport(){
 async function exportCSV(tipo){
   const dal=document.getElementById('e-dal')?.value||'';
   const al=document.getElementById('e-al')?.value||'';
-  let qgg=sb.from('TurniGiornalieri').select('*').order('DataInizio');
+  let qgg=sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio');
   if(dal)qgg=qgg.gte('DataInizio',dal);
   if(al)qgg=qgg.lte('DataInizio',al);
   const{data:ggs}=await qgg;
-  const{data:bats}=await sb.from('BattesimiTurno').select('*');
-  const{data:prods}=await sb.from('ProduzioneReparti').select('*');
-  const{data:prodOp}=await sb.from('ProduzioneOperatori').select('*');
+  const{data:bats}=await sb.from('BattesimiTurno').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
+  const{data:prods}=await sb.from('ProduzioneReparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
+  const{data:prodOp}=await sb.from('ProduzioneOperatori').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
   let csv='',nome='';
 
   if(tipo==='turni'){
@@ -3035,7 +3039,7 @@ async function exportCSV(tipo){
   } else if(tipo==='prod'){
     nome='PRODUZIONE_REPARTI.csv';
     csv='DataProduzione;ID_Reparto;NomeReparto;ID_TipoProduzione;TipoProduzione;UnitaMisura;Quantita;Turno\n';
-    const{data:tipi}=await sb.from('TipiProduzione').select('*');
+    const{data:tipi}=await sb.from('TipiProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
     csv+=(prods||[]).filter(p=>(!dal||p.DataProduzione>=dal)&&(!al||p.DataProduzione<=al)).map(p=>{
       const t=tipi?.find(x=>x.ID_TipoProduzione==p.ID_TipoProduzione);
       return [p.DataProduzione,p.ID_Reparto,nomeRep(p.ID_Reparto),p.ID_TipoProduzione,t?.TipoProduzione||'',t?.UnitaMisura||'',p.Quantita,p.Notturno?'Notturno':'Diurno'].join(';');
