@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v66</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v67</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -288,7 +288,18 @@ async function caricaDatiBase(){
     sb.from('Livelli').select('*'),
     sb.from('TipiProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('TipoProduzione')
   ]);
-  _dips=d||[];_reparti=r||[];_attivita=a||[];
+  // Normalizza Magazzini di ogni dipendente: può arrivare come array nativo o stringa Postgres "{1,2}"
+  _dips=(d||[]).map(dip=>{
+    let mag=dip.Magazzini;
+    if(Array.isArray(mag)){
+      mag=mag.map(Number);
+    }else if(typeof mag==='string'){
+      mag=mag.replace(/[{}\[\]]/g,'').split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n));
+    }
+    if(!mag||!mag.length)mag=[1];
+    return{...dip,Magazzini:mag};
+  });
+  _reparti=r||[];_attivita=a||[];
   _contratti=c||[];_livelli=l||[];_tipiProd=t||[];
 }
 
@@ -533,7 +544,7 @@ async function showTab(id){
 }
 
 // SELECT HELPERS
-function optDips(sel=''){return _dips.filter(d=>d.Attivo).map(d=>`<option value="${d.ID_Dipendente}"${d.ID_Dipendente==sel?' selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');}
+function optDips(sel=''){return _dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).includes(MAGAZZINO_ATTIVO)).map(d=>`<option value="${d.ID_Dipendente}"${d.ID_Dipendente==sel?' selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');}
 function optReps(sel=''){return _reparti.map(r=>`<option value="${r.ID_Reparto}"${r.ID_Reparto==sel?' selected':''}>${r.NomeReparto}</option>`).join('');}
 function optAtts(idRep='',sel=''){
   const f=idRep?_attivita.filter(a=>a.ID_Reparto==idRep):_attivita;
@@ -2403,21 +2414,37 @@ async function renderConfig(){
           <select id="dp-attivo"><option value="true">Attivo</option><option value="false">Non attivo</option></select>
         </div>
       </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label>Magazzini di lavoro</label>
+        <div style="display:flex;gap:18px;margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+            <input type="checkbox" id="dp-mag-1" checked> Cassano
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+            <input type="checkbox" id="dp-mag-2"> Cameri
+          </label>
+        </div>
+      </div>
       <button class="btn bp bsm" onclick="salvaDipendente()">+ Aggiungi dipendente</button>
       <div class="tw" style="max-height:320px;overflow-y:auto;margin-top:14px;"><table>
-        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>Voice</th><th>Stato</th><th></th></tr></thead>
-        <tbody id="tbody-dips">${(tuttiDips||[]).map(d=>`<tr>
+        <thead><tr><th>ID</th><th>Nome</th><th>Contratto</th><th>Livello</th><th>Voice</th><th>Magazzini</th><th>Stato</th><th></th></tr></thead>
+        <tbody id="tbody-dips">${(tuttiDips||[]).map(d=>{
+          const magList=d.Magazzini||[1];
+          const magLabels=magList.map(m=>_magazzini.find(x=>x.ID_Magazzino===m)?.NomeMagazzino||m).join(', ');
+          return `<tr>
           <td><span class="bid">${d.ID_Dipendente}</span></td>
           <td><strong>${d.Nome}</strong></td>
           <td>${nomeCont(d.ID_Contratto)}</td>
           <td>${nomeLiv(d.ID_Livello)}</td>
           <td class="mono">${d.CodiceVoice||'—'}</td>
+          <td><span class="pill py">${magLabels}</span></td>
           <td><span class="pill ${d.Attivo?'pg':'pr'}">${d.Attivo?'Attivo':'Non attivo'}</span></td>
           <td style="white-space:nowrap;">
             <button class="btn bp bsm" onclick="editDipendente(${d.ID_Dipendente})" style="margin-right:4px;">✎</button>
+            <button class="btn bo bsm" onclick="editMagazziniDipendente(${d.ID_Dipendente},'${(magList||[]).join(',')}')" style="margin-right:4px;" title="Modifica magazzini">📦</button>
             <button class="btn br bsm" onclick="toggleDipendente(${d.ID_Dipendente},${d.Attivo})">${d.Attivo?'Disattiva':'Attiva'}</button>
           </td>
-        </tr>`).join('')}</tbody>
+        </tr>`;}).join('')}</tbody>
       </table></div>
     </div>
   </div>
@@ -3172,12 +3199,33 @@ async function salvaDipendente(){
   const id_c=parseInt(document.getElementById('dp-cont').value);
   const id_l=parseInt(document.getElementById('dp-lv').value);
   const attivo=document.getElementById('dp-attivo').value==='true';
+  const magazzini=[];
+  if(document.getElementById('dp-mag-1')?.checked)magazzini.push(1);
+  if(document.getElementById('dp-mag-2')?.checked)magazzini.push(2);
   if(!nome||!voice){toast('Nome e CodiceVoice obbligatori','err');return;}
-  const{error}=await sb.from('Dipendenti').insert({Nome:nome,CodiceVoice:voice,ID_Contratto:id_c,ID_Livello:id_l,Attivo:attivo});
+  if(!magazzini.length){toast('Seleziona almeno un magazzino','err');return;}
+  const{error}=await sb.from('Dipendenti').insert({Nome:nome,CodiceVoice:voice,ID_Contratto:id_c,ID_Livello:id_l,Attivo:attivo,Magazzini:magazzini});
   if(error){toast('Errore: '+error.message,'err');return;}
   toast('Dipendente aggiunto');
   document.getElementById('dp-nome').value='';
   document.getElementById('dp-voice').value='';
+  await caricaDatiBase();
+  await renderConfig();
+}
+
+async function editMagazziniDipendente(id, magazziniAttuali){
+  const attualiArr=magazziniAttuali.split(',').map(Number).filter(n=>!isNaN(n));
+  const haCassano=attualiArr.includes(1);
+  const haCameri=attualiArr.includes(2);
+  const rispCassano=confirm(`Questo dipendente lavora a CASSANO?\n\nOK = Sì, lavora a Cassano\nAnnulla = No`);
+  const rispCameri=confirm(`Questo dipendente lavora a CAMERI?\n\nOK = Sì, lavora a Cameri\nAnnulla = No`);
+  const nuoviMag=[];
+  if(rispCassano)nuoviMag.push(1);
+  if(rispCameri)nuoviMag.push(2);
+  if(!nuoviMag.length){toast('Deve lavorare in almeno un magazzino — nessuna modifica effettuata','err');return;}
+  const{error}=await sb.from('Dipendenti').update({Magazzini:nuoviMag}).eq('ID_Dipendente',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('✔ Magazzini aggiornati');
   await caricaDatiBase();
   await renderConfig();
 }
