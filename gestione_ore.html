@@ -2447,6 +2447,26 @@ async function renderConfig(){
     </table></div>
   </div>
 
+  <!-- TIPI PRODUZIONE -->
+  <div class="card" style="margin-top:14px;">
+    <div class="ct">Tipi produzione</div>
+    <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">
+      Es. colli, pallet, ceste — le voci che si scelgono in Inserimento Produzione. Ogni tipo appartiene al magazzino attivo.
+    </p>
+    <div class="g4" style="margin-bottom:10px;align-items:end;">
+      <div class="fg"><label>Reparto</label>
+        <select id="tipr-rep"><option value="">— Seleziona —</option>${optReps()}</select>
+      </div>
+      <div class="fg"><label>Nome tipo</label><input id="tipr-nome" type="text" placeholder="es. Ortofrutta_P1"></div>
+      <div class="fg"><label>Unità di misura</label><input id="tipr-um" type="text" placeholder="es. colli, pallet"></div>
+      <div><button class="btn bp bsm" onclick="salvaTipoProd()">+ Aggiungi tipo</button></div>
+    </div>
+    <div class="tw" style="max-height:280px;overflow-y:auto;"><table>
+      <thead><tr><th>ID</th><th>Reparto</th><th>Nome</th><th>Unità</th><th></th></tr></thead>
+      <tbody id="tbody-tipiprod"><tr><td colspan="5" class="loading">Caricamento...</td></tr></tbody>
+    </table></div>
+  </div>
+
   ${isAdmin?`
   <!-- TARIFFE ECONOMIA -->
   <div class="card" style="margin-top:14px;">
@@ -2553,14 +2573,28 @@ async function renderConfig(){
 }
 
 async function caricaTariffe(){
-  const[{data:te},{data:lv},{data:tp},{data:cm},{data:reps},{data:atts}]=await Promise.all([
+  const[{data:te},{data:lv},{data:tp},{data:cm},{data:reps},{data:atts},{data:tipiP}]=await Promise.all([
     sb.from('TariffeEconomia').select('*').order('DataInizio',{ascending:false}),
     sb.from('Livelli').select('*').order('ID_Contratto'),
-    sb.from('TariffeProduzione').select('*').order('DataInizio',{ascending:false}),
-    sb.from('CostiMezziReparti').select('*').order('DataInizio',{ascending:false}),
-    sb.from('Reparti').select('*').order('ID_Reparto'),
-    sb.from('Attivita').select('*').order('ID_Attivita')
+    sb.from('TariffeProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio',{ascending:false}),
+    sb.from('CostiMezziReparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio',{ascending:false}),
+    sb.from('Reparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('ID_Reparto'),
+    sb.from('Attivita').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('ID_Attivita'),
+    sb.from('TipiProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('ID_TipoProduzione')
   ]);
+
+  // Tipi produzione
+  const tTipiP=document.getElementById('tbody-tipiprod');
+  if(tTipiP)tTipiP.innerHTML=(tipiP||[]).map(t=>`<tr>
+    <td><span class="bid">${t.ID_TipoProduzione}</span></td>
+    <td><span class="pill py">${nomeRep(t.ID_Reparto)}</span></td>
+    <td><strong>${t.TipoProduzione}</strong></td>
+    <td>${t.UnitaMisura||'—'}</td>
+    <td>
+      <button class="btn bp bsm" onclick="editTipoProd(${t.ID_TipoProduzione},'${(t.TipoProduzione||'').replace(/'/g,"\\'")}','${(t.UnitaMisura||'').replace(/'/g,"\\'")}')" style="margin-right:4px;">✎</button>
+      <button class="btn br bsm" onclick="eliminaTipoProd(${t.ID_TipoProduzione})">✕</button>
+    </td>
+  </tr>`).join('')||'<tr><td colspan="5" class="empty">Nessun tipo produzione</td></tr>';
 
   // Reparti
   const tReps=document.getElementById('tbody-reparti');
@@ -2716,10 +2750,10 @@ async function salvaTariffaProd(){
   const TipoTurno=document.getElementById('tp-turno').value;
   const DataInizio=document.getElementById('tp-dal').value;
   if(!ID_TipoProduzione||!Tariffa||!DataInizio){toast('Compila tutti i campi','err');return;}
-  // chiudi quella corrente stesso tipo/giorno/turno
+  // chiudi quella corrente stesso tipo/giorno/turno (solo nel magazzino attivo)
   await sb.from('TariffeProduzione').update({DataFine:DataInizio})
-    .eq('ID_TipoProduzione',ID_TipoProduzione).eq('TipoGiorno',TipoGiorno).eq('TipoTurno',TipoTurno).is('DataFine',null);
-  await sb.from('TariffeProduzione').insert({ID_TipoProduzione,Tariffa,DataInizio,TipoGiorno,TipoTurno});
+    .eq('ID_TipoProduzione',ID_TipoProduzione).eq('TipoGiorno',TipoGiorno).eq('TipoTurno',TipoTurno).eq('ID_Magazzino',MAGAZZINO_ATTIVO).is('DataFine',null);
+  await sb.from('TariffeProduzione').insert({ID_TipoProduzione,Tariffa,DataInizio,TipoGiorno,TipoTurno,ID_Magazzino:MAGAZZINO_ATTIVO});
   toast('✔ Tariffa produzione aggiornata');caricaTariffe();
 }
 
@@ -2734,8 +2768,8 @@ async function salvaCostoMezzo(){
   const CostoGiornaliero=parseFloat(document.getElementById('cm-costo').value);
   const DataInizio=document.getElementById('cm-dal').value;
   if(!ID_Reparto||!CostoGiornaliero||!DataInizio){toast('Compila tutti i campi','err');return;}
-  await sb.from('CostiMezziReparti').update({DataFine:DataInizio}).eq('ID_Reparto',ID_Reparto).is('DataFine',null);
-  await sb.from('CostiMezziReparti').insert({ID_Reparto,CostoGiornaliero,DataInizio});
+  await sb.from('CostiMezziReparti').update({DataFine:DataInizio}).eq('ID_Reparto',ID_Reparto).eq('ID_Magazzino',MAGAZZINO_ATTIVO).is('DataFine',null);
+  await sb.from('CostiMezziReparti').insert({ID_Reparto,CostoGiornaliero,DataInizio,ID_Magazzino:MAGAZZINO_ATTIVO});
   toast('✔ Costo mezzo aggiornato');caricaTariffe();
 }
 
@@ -3033,7 +3067,7 @@ async function exportCSV(tipo){
 async function salvaReparto(){
   const nome=document.getElementById('rep-nome').value.trim();
   if(!nome){toast('Inserisci il nome del reparto','err');return;}
-  const{error}=await sb.from('Reparti').insert({NomeReparto:nome});
+  const{error}=await sb.from('Reparti').insert({NomeReparto:nome,ID_Magazzino:MAGAZZINO_ATTIVO});
   if(error){toast('Errore: '+error.message,'err');return;}
   toast('Reparto aggiunto');
   document.getElementById('rep-nome').value='';
@@ -3065,7 +3099,7 @@ async function salvaAttivita(){
   const nome=document.getElementById('att-nome').value.trim();
   const id_rep=parseInt(document.getElementById('att-rep').value);
   if(!nome||!id_rep){toast('Compila reparto e nome','err');return;}
-  const{error}=await sb.from('Attivita').insert({NomeAttivita:nome,ID_Reparto:id_rep});
+  const{error}=await sb.from('Attivita').insert({NomeAttivita:nome,ID_Reparto:id_rep,ID_Magazzino:MAGAZZINO_ATTIVO});
   if(error){toast('Errore: '+error.message,'err');return;}
   toast('Attività aggiunta');
   document.getElementById('att-nome').value='';
@@ -3088,6 +3122,41 @@ async function eliminaAttivita(id){
   const{error}=await sb.from('Attivita').delete().eq('ID_Attivita',id);
   if(error){toast('Errore: '+error.message,'err');return;}
   toast('Attività eliminata');
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+// ===== TIPI PRODUZIONE CRUD =====
+async function salvaTipoProd(){
+  const id_rep=parseInt(document.getElementById('tipr-rep').value);
+  const nome=document.getElementById('tipr-nome').value.trim();
+  const um=document.getElementById('tipr-um').value.trim();
+  if(!id_rep||!nome){toast('Compila reparto e nome','err');return;}
+  const{error}=await sb.from('TipiProduzione').insert({ID_Reparto:id_rep,TipoProduzione:nome,UnitaMisura:um,ID_Magazzino:MAGAZZINO_ATTIVO});
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Tipo produzione aggiunto');
+  document.getElementById('tipr-nome').value='';
+  document.getElementById('tipr-um').value='';
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+async function editTipoProd(id,nomeAttuale,umAttuale){
+  const nuovo=prompt('Nuovo nome tipo produzione:',nomeAttuale);
+  if(!nuovo)return;
+  const nuovaUm=prompt('Nuova unità di misura:',umAttuale||'');
+  const{error}=await sb.from('TipiProduzione').update({TipoProduzione:nuovo,UnitaMisura:nuovaUm}).eq('ID_TipoProduzione',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Tipo produzione aggiornato');
+  await caricaDatiBase();
+  await caricaTariffe();
+}
+
+async function eliminaTipoProd(id){
+  if(!confirm('Eliminare questo tipo produzione?'))return;
+  const{error}=await sb.from('TipiProduzione').delete().eq('ID_TipoProduzione',id);
+  if(error){toast('Errore: '+error.message,'err');return;}
+  toast('Tipo produzione eliminato');
   await caricaDatiBase();
   await caricaTariffe();
 }
