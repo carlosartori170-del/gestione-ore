@@ -198,7 +198,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v54</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v55</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -308,7 +308,8 @@ const ICO={
   dropdown:`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
   caret:`<svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;"><polyline points="6 9 12 15 18 9"/></svg>`,
   report:`<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>`,
-  archivio:`<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l3-4h14l3 4"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`
+  archivio:`<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l3-4h14l3 4"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`,
+  tprodop:`<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
 };
 
 // STRUTTURA NAV: voci singole oppure gruppi (dropdown) con sottovoci
@@ -325,7 +326,8 @@ const NAV_ADMIN=[
   {group:'Archivio',icon:ICO.archivio,items:[
     ['tprodreport',ICO.tprodreport,'Archivio Produzione'],
     ['ta',ICO.ta,'Archivio Turni'],
-    ['taop',ICO.taop,'Archivio Operativo']
+    ['taop',ICO.taop,'Archivio Operativo'],
+    ['tprodop',ICO.tprodop,'Produttività Operatori']
   ]},
   ['tconf',ICO.tconf,'Configurazione'],
   ['timport',ICO.timport,'Importa'],
@@ -341,7 +343,8 @@ const NAV_RESP=[
   {group:'Archivio',icon:ICO.archivio,items:[
     ['tprodreport',ICO.tprodreport,'Archivio Produzione'],
     ['ta',ICO.ta,'Archivio Turni'],
-    ['taop',ICO.taop,'Archivio Operativo']
+    ['taop',ICO.taop,'Archivio Operativo'],
+    ['tprodop',ICO.tprodop,'Produttività Operatori']
   ]},
   ['tconf',ICO.tconf,'Configurazione'],
   ['timport',ICO.timport,'Importa'],
@@ -420,6 +423,7 @@ async function showTab(id){
   else if(id==='tprodreport')renderReportProduzione();
   else if(id==='ta')renderArchivio();
   else if(id==='taop')renderArchivioOperativo();
+  else if(id==='tprodop')renderProduttivitaOperatori();
   else if(id==='tconf')renderConfig();
   else if(id==='timport')renderImport();
   else if(id==='texport')renderExport();
@@ -1991,6 +1995,127 @@ async function filtraArchivioOperativo(){
         <td>${fmtN(totNotturne,2)}h</td>
         <td>${tuttiDip.size}</td>
       </tr></tfoot>
+    </table></div>
+  </div>`;
+}
+
+// ============================================================
+// TAB: PRODUTTIVITÀ OPERATORI (visibile ad admin e responsabile)
+// Collega ProduzioneOperatori (per CodiceVoice) ai Dipendenti, e calcola
+// le ore Ventilazione Ortofrutta (att.15) per ottenere colli/ora per dipendente.
+// ============================================================
+async function renderProduttivitaOperatori(){
+  const mc=document.getElementById('mc');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="ct">${ICO.tprodop} Filtri produttività operatori</div>
+    <div class="g3">
+      <div class="fg"><label>Dal</label><input id="po-dal" type="date" value="${oggi().slice(0,7)+'-01'}"></div>
+      <div class="fg"><label>Al</label><input id="po-al" type="date" value="${oggi()}"></div>
+      <div class="fg"><label>Dipendente</label><select id="po-dip"><option value="">Tutti</option>${optDips()}</select></div>
+    </div>
+    <div class="brow"><button class="btn bp bsm" onclick="filtraProduttivitaOperatori()">🔍 Filtra</button></div>
+  </div>
+  <div id="po-content"><div class="empty" style="padding:32px;text-align:center;">Imposta i filtri e clicca "Filtra"</div></div>`;
+}
+
+async function filtraProduttivitaOperatori(){
+  const dal=document.getElementById('po-dal')?.value||'';
+  const al=document.getElementById('po-al')?.value||'';
+  const fdip=document.getElementById('po-dip')?.value||'';
+  const cont=document.getElementById('po-content');
+  cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
+
+  // 1. Colli per dipendente+giorno (da ProduzioneOperatori, collegato via CodiceVoice)
+  let qpo=sb.from('ProduzioneOperatori').select('*');
+  if(dal)qpo=qpo.gte('DataProduzione',dal);
+  if(al)qpo=qpo.lte('DataProduzione',al);
+  const{data:prodOp}=await qpo;
+
+  if(!prodOp||!prodOp.length){cont.innerHTML='<div class="empty">Nessun dato di produzione operatori nel periodo selezionato.</div>';return;}
+
+  // Mappa CodiceVoice -> Dipendente
+  const dipByVoice={};
+  _dips.forEach(d=>{if(d.CodiceVoice)dipByVoice[d.CodiceVoice]=d;});
+
+  // 2. Ore Ventilazione Ortofrutta (att.15) per dipendente+giorno, dalla view già pronta
+  let qb=sb.from('BattesimiConData').select('ID_Dipendente,DataInizio,OreBattezzate').eq('ID_Attivita',15);
+  if(dal)qb=qb.gte('DataInizio',dal);
+  if(al)qb=qb.lte('DataInizio',al);
+  let oreAll=[];
+  {
+    let lastOff=0;
+    while(true){
+      const{data:batch,error}=await qb.range(lastOff,lastOff+999);
+      if(error||!batch||!batch.length)break;
+      oreAll=[...oreAll,...batch];
+      if(batch.length<1000)break;
+      lastOff+=1000;
+    }
+  }
+
+  // Aggrega ore per dipendente+giorno
+  const oreByDipGiorno={};
+  oreAll.forEach(o=>{
+    const k=o.ID_Dipendente+'|'+o.DataInizio;
+    oreByDipGiorno[k]=(oreByDipGiorno[k]||0)+(o.OreBattezzate||0);
+  });
+
+  // Aggrega colli per dipendente+giorno (filtra per dipendente se richiesto)
+  const righeDettaglio=[];
+  const perDipendente={};
+  prodOp.forEach(p=>{
+    const dip=dipByVoice[p.CodiceVoice];
+    if(!dip)return; // CodiceVoice non associato a nessun dipendente attivo
+    if(fdip && dip.ID_Dipendente!=fdip)return;
+    const k=dip.ID_Dipendente+'|'+p.DataProduzione;
+    const ore=oreByDipGiorno[k]||0;
+    righeDettaglio.push({data:p.DataProduzione,dip,colli:p.Colli||0,ore});
+    if(!perDipendente[dip.ID_Dipendente])perDipendente[dip.ID_Dipendente]={nome:dip.Nome,colli:0,ore:0};
+    perDipendente[dip.ID_Dipendente].colli+=p.Colli||0;
+    perDipendente[dip.ID_Dipendente].ore+=ore;
+  });
+
+  if(!righeDettaglio.length){cont.innerHTML='<div class="empty">Nessun dato collegabile a dipendenti nel periodo selezionato (verifica i CodiceVoice in Configurazione).</div>';return;}
+
+  righeDettaglio.sort((a,b)=>a.data.localeCompare(b.data)||a.dip.Nome.localeCompare(b.dip.Nome));
+
+  const totColli=righeDettaglio.reduce((a,r)=>a+r.colli,0);
+  const totOre=righeDettaglio.reduce((a,r)=>a+r.ore,0);
+
+  const righeAgg=Object.values(perDipendente).sort((a,b)=>b.colli-a.colli).map(v=>`<tr>
+    <td><strong>${v.nome}</strong></td>
+    <td>${fmtN(v.colli,0)}</td>
+    <td>${fmtN(v.ore,2)}h</td>
+    <td><strong>${v.ore>0?fmtN(v.colli/v.ore,1):'—'}</strong></td>
+  </tr>`).join('');
+
+  const righeDett=righeDettaglio.map(r=>`<tr>
+    <td>${fmtDataIT(r.data)}</td>
+    <td>${r.dip.Nome}</td>
+    <td>${fmtN(r.colli,0)}</td>
+    <td>${fmtN(r.ore,2)}h</td>
+    <td>${r.ore>0?fmtN(r.colli/r.ore,1):'—'}</td>
+  </tr>`).join('');
+
+  cont.innerHTML=`
+  <div class="card" style="margin-bottom:14px;background:var(--sfondo);">
+    <div style="font-size:0.85rem;color:var(--grigio);">Dipendenti coinvolti: <strong>${Object.keys(perDipendente).length}</strong> | Righe: <strong>${righeDettaglio.length}</strong></div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--verde);margin-top:4px;">${totOre>0?fmtN(totColli/totOre,1):'—'} <span style="font-size:0.85rem;font-weight:500;color:var(--grigio);">colli/ora medio nel periodo</span></div>
+    <div style="font-size:0.85rem;color:var(--grigio);margin-top:4px;">Colli totali: <strong>${fmtN(totColli,0)}</strong> · Ore totali: <strong>${fmtN(totOre,2)}h</strong></div>
+  </div>
+  <div class="card" style="margin-bottom:14px;">
+    <div class="ct">Totali per dipendente <span style="font-weight:400;font-size:0.78rem;color:var(--grigio);">(periodo aggregato)</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>Dipendente</th><th>Colli tot.</th><th>Ore tot.</th><th>Colli/ora</th></tr></thead>
+      <tbody>${righeAgg}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="ct">Dettaglio giornaliero <span style="font-weight:400;font-size:0.78rem;color:var(--grigio);">(${righeDettaglio.length} righe)</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>Data</th><th>Dipendente</th><th>Colli</th><th>Ore</th><th>Colli/ora</th></tr></thead>
+      <tbody>${righeDett}</tbody>
     </table></div>
   </div>`;
 }
