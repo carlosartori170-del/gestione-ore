@@ -198,7 +198,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v52</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v54</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -822,7 +822,8 @@ async function renderProduzione(){
   <div class="card">
     <div class="ct"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Importa produzione operatori (Excel)</div>
     <p style="font-size:0.82rem;color:var(--grigio);margin-bottom:14px;">
-      Carica il file Excel del cliente. Colonne richieste: <strong>DataProduzione, CodiceVoice, ID_Attivita, Colli</strong>
+      Carica il file Excel del cliente. Colonne richieste: <strong>DataProduzione, CodiceVoice, ID_Attivita, Colli</strong><br>
+      <span style="font-size:0.76rem;">Supporta anche l'export Tigros con colonne <strong>Giorno</strong> (data), <strong>Operatore</strong> (es. "0023063 NEXUS 23063" — estrae automaticamente il codice numerico) e qualsiasi colonna che inizi per <strong>Colli</strong> (es. "Colli in uscita - Eterogenei", con formato numerico italiano 1.526). Se manca ID_Attivita viene usato il default 15 (Ventilazione Ortofrutta).</span>
     </p>
     <div class="upload-area" onclick="document.getElementById('file-prod').click()">
       <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -880,11 +881,27 @@ async function importaProduzione(e){
     const rows=utils.sheet_to_json(ws);
     let ok=0,skip=0;
     for(const row of rows){
-      const DataProduzione=row['DataProduzione']||row['Data']||row['data'];
-      const CodiceVoice=row['CodiceVoice']||row['codice_voice']||row['Operatore'];
-      const Colli=row['Colli']||row['colli'];
+      const DataProduzione=row['DataProduzione']||row['Data']||row['data']||row['Giorno']||row['giorno'];
+      // Operatore può arrivare come numero puro (CodiceVoice) o come stringa tipo
+      // "0023063 NEXUS 23063" (export Tigros) — estrae il primo numero trovato
+      const operatoreRaw=row['CodiceVoice']||row['codice_voice']||row['Operatore']||row['operatore'];
+      let CodiceVoice=operatoreRaw;
+      if(typeof operatoreRaw==='string'){
+        const m=operatoreRaw.match(/\d+/);
+        CodiceVoice=m?parseInt(m[0],10):null;
+      } else if(typeof operatoreRaw==='number'){
+        CodiceVoice=operatoreRaw;
+      }
+      // Colli: prende SOLO la colonna "Colli in uscita - Eterogenei" (colonna C del file Tigros)
+      // Ignora deliberatamente le altre colonne extra del file (Omogenei, Volumi, Pallet, ecc.)
+      let colliRaw=row['Colli']||row['colli']||row['Colli in uscita - Eterogenei'];
+      if(colliRaw===undefined||colliRaw===null||colliRaw===''){skip++;continue;} // riga senza dato in colonna C: scarta
+      let Colli=colliRaw;
+      if(typeof colliRaw==='string'){
+        Colli=parseFloat(colliRaw.replace(/\./g,'').replace(',','.'));
+      }
       const ID_Attivita=row['ID_Attivita']||row['id_attivita']||15;
-      if(!DataProduzione||!CodiceVoice||!Colli){skip++;continue;}
+      if(!DataProduzione||!CodiceVoice){skip++;continue;}
       // normalizza data
       let dataNorm=DataProduzione;
       if(typeof DataProduzione==='number'){
