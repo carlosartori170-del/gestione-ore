@@ -78,6 +78,13 @@ nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
 .ckitem{display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:0.84rem;cursor:pointer;border-radius:5px;}
 .ckitem:hover{background:var(--sfondo);}
 .ckitem input{margin:0;cursor:pointer;}
+
+/* Selezione magazzino */
+.magcard{border:1.5px solid var(--bordo);border-radius:10px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:all 0.15s;text-align:left;background:white;width:100%;}
+.magcard:hover{border-color:var(--p);background:var(--sfondo);transform:translateY(-1px);}
+.magcard-icon{width:40px;height:40px;background:var(--sfondo);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+.magcard-name{font-weight:700;color:var(--p);font-size:0.95rem;}
+.magcard-sub{font-size:0.76rem;color:var(--grigio);margin-top:2px;}
 .navgroup.open .navgroup-menu{display:flex;}
 
 main{padding:20px 16px;max-width:1100px;margin:0 auto;}
@@ -208,9 +215,10 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v58</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v59</span></h1>
     </div>
     <div class="hright">
+      <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
       <span class="rbadge" id="rbadge">—</span>
       <button class="logoutbtn" onclick="doLogout()">
         <svg style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle;" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -222,12 +230,23 @@ tr:hover td{background:#f5fbf7;}
   <main id="mc"><div class="loading">Caricamento...</div></main>
 </div>
 
+<!-- SELEZIONE MAGAZZINO -->
+<div id="mag-overlay" style="display:none;position:fixed;inset:0;background:rgba(20,83,45,0.55);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;padding:36px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <h2 style="font-size:1.2rem;font-weight:800;color:var(--p);margin-bottom:6px;">Seleziona magazzino</h2>
+    <p style="font-size:0.85rem;color:var(--grigio);margin-bottom:22px;">Scegli su quale magazzino vuoi operare. Potrai cambiarlo in qualsiasi momento.</p>
+    <div id="mag-cards" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
 <script>
 const SB_URL='https://eqtyfnluswalfassmlxd.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxdHlmbmx1c3dhbGZhc3NtbHhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzE4NzksImV4cCI6MjA5NjYwNzg3OX0.bkTpKYduJV_PVNxEt6xgu0dWHy8kjmkMExlhBaCZSyk';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 
 let ME=null;
+let MAGAZZINO_ATTIVO=null; // ID_Magazzino selezionato per la sessione corrente
+let _magazzini=[]; // lista completa magazzini (per nomi)
 let _righe=[],_preBatt=[];
 let _dips=[],_reparti=[],_attivita=[],_contratti=[],_livelli=[],_tipiProd=[];
 
@@ -262,12 +281,12 @@ function nomeTipoProd(id){const t=_tipiProd.find(x=>x.ID_TipoProduzione==id);ret
 
 async function caricaDatiBase(){
   const[{data:d},{data:r},{data:a},{data:c},{data:l},{data:t}]=await Promise.all([
-    sb.from('Dipendenti').select('*').order('Nome'), // tutti (attivi e non) — serve per report storici
-    sb.from('Reparti').select('*').order('NomeReparto'),
-    sb.from('Attivita').select('*').order('NomeAttivita'),
+    sb.from('Dipendenti').select('*').order('Nome'), // tutti (attivi e non) — serve per report storici, condiviso tra magazzini
+    sb.from('Reparti').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('NomeReparto'),
+    sb.from('Attivita').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('NomeAttivita'),
     sb.from('Contratti').select('*'),
     sb.from('Livelli').select('*'),
-    sb.from('TipiProduzione').select('*').order('TipoProduzione')
+    sb.from('TipiProduzione').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('TipoProduzione')
   ]);
   _dips=d||[];_reparti=r||[];_attivita=a||[];
   _contratti=c||[];_livelli=l||[];_tipiProd=t||[];
@@ -284,17 +303,79 @@ async function doLogin(){
     const{data,error}=await sb.from('Utenti').select('*').eq('Username',user).eq('Password',pass);
     if(error)throw error;
     if(!data||!data.length){err.textContent='Username o password errati.';return;}
-    ME={username:data[0].Username,ruolo:data[0].Ruolo};
+    ME={username:data[0].Username,ruolo:data[0].Ruolo,magazzini:data[0].Magazzini_Accessibili||[1]};
     err.textContent='';
-    await caricaDatiBase();
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app').style.display='block';
-    document.getElementById('rbadge').textContent=ME.ruolo==='admin'?'👑 Amministratore':'🔧 Responsabile';
-    buildNav();showFirstTab();
+
+    // Carica elenco magazzini (per nomi nelle card/selettore)
+    const{data:mags}=await sb.from('Magazzini').select('*').order('ID_Magazzino');
+    _magazzini=mags||[];
+
+    if(ME.magazzini.length>1){
+      // Più magazzini accessibili: mostra schermata di scelta prima di entrare
+      mostraSceltaMagazzino(true);
+    }else{
+      // Un solo magazzino accessibile: entra direttamente
+      MAGAZZINO_ATTIVO=ME.magazzini[0];
+      await entraInApp();
+    }
   }catch(e){err.textContent='Errore: '+e.message;}
+}
+
+function mostraSceltaMagazzino(primoAccesso){
+  document.getElementById('login-screen').style.display='none';
+  const overlay=document.getElementById('mag-overlay');
+  const cardsDiv=document.getElementById('mag-cards');
+  const magsAccessibili=_magazzini.filter(m=>ME.magazzini.includes(m.ID_Magazzino));
+  cardsDiv.innerHTML=magsAccessibili.map(m=>`
+    <button class="magcard" onclick="selezionaMagazzino(${m.ID_Magazzino},${primoAccesso})">
+      <div class="magcard-icon">📦</div>
+      <div>
+        <div class="magcard-name">${m.NomeMagazzino}</div>
+        <div class="magcard-sub">Magazzino ${m.ID_Magazzino}</div>
+      </div>
+    </button>`).join('');
+  overlay.style.display='flex';
+}
+
+async function selezionaMagazzino(idMag, primoAccesso){
+  MAGAZZINO_ATTIVO=idMag;
+  document.getElementById('mag-overlay').style.display='none';
+  if(primoAccesso){
+    await entraInApp();
+  }else{
+    // Cambio magazzino a sessione già avviata: ricarica dati e torna al tab corrente
+    await caricaDatiBase();
+    aggiornaMagBtnLabel();
+    showFirstTab();
+  }
+}
+
+function apriSceltaMagazzino(){
+  if(!ME||ME.magazzini.length<2)return;
+  mostraSceltaMagazzino(false);
+}
+
+function aggiornaMagBtnLabel(){
+  const btn=document.getElementById('magbtn');
+  const lbl=document.getElementById('magbtn-label');
+  if(!btn||!lbl)return;
+  const mag=_magazzini.find(m=>m.ID_Magazzino===MAGAZZINO_ATTIVO);
+  lbl.textContent=mag?mag.NomeMagazzino:'—';
+  btn.style.display=(ME&&ME.magazzini.length>1)?'inline-flex':'none';
+}
+
+async function entraInApp(){
+  await caricaDatiBase();
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('mag-overlay').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('rbadge').textContent=ME.ruolo==='admin'?'👑 Amministratore':'🔧 Responsabile';
+  aggiornaMagBtnLabel();
+  buildNav();showFirstTab();
 }
 function doLogout(){
   ME=null;
+  MAGAZZINO_ATTIVO=null;
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('lp').value='';
