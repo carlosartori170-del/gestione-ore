@@ -198,7 +198,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v55</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v56</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -1721,24 +1721,29 @@ async function eliminaProdRepReport(id){
 async function renderArchivio(){
   // Carica solo i dati per le statistiche iniziali (senza limit)
   // I battesimi filtrati vengono caricati separatamente con filtraArch()
-  const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,Ore_A,Ore_B').order('DataInizio',{ascending:false});
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,OraInizio,OraFine,Ore_A,Ore_B').order('DataInizio',{ascending:false});
   const totOre=(ggs||[]).reduce((a,g)=>a+(g.Ore_A||0)+(g.Ore_B||0),0);
   const{data:bats}=await sb.from('BattesimiTurno').select('*').order('ID_Turno',{ascending:false}).limit(200);
 
   const righeB=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+    const orario=g?.OraInizio?`${g.OraInizio.slice(0,5)} - ${(g.OraFine||'').slice(0,5)}`:'—';
     return `<tr>
       <td><span class="bmov">${b.ID_Battesimo||b.id}</span></td>
       <td><span class="bid">${g?.ID_Dipendente||'—'}</span></td>
       <td>${nomeDip(g?.ID_Dipendente)}</td>
       <td>${g?.DataInizio||'—'}</td>
+      <td style="font-size:0.78rem;white-space:nowrap;">${orario}</td>
       <td>${b.OrdineRiga}</td>
       <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
       <td><strong>${b.OreBattezzate}h</strong></td>
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
-      <td><button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button></td>
-    </tr>`;}).join('')||'<tr><td colspan="10" class="empty">Nessun dato</td></tr>';
+      <td style="display:flex;gap:4px;">
+        <button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button>
+        <button class="btn br bsm" onclick="eliminaTurnoCompletoDaArchivio(${g?.ID_Turno})" title="Elimina turno completo">✕</button>
+      </td>
+    </tr>`;}).join('')||'<tr><td colspan="11" class="empty">Nessun dato</td></tr>';
 
   // Conteggi reali dal database
   const[{count:cntTurni},{count:cntBats}]=await Promise.all([
@@ -1768,7 +1773,7 @@ async function renderArchivio(){
   <div class="card">
     <div class="ct">Battesimi</div>
     <div class="tw"><table>
-      <thead><tr><th>ID Bat.</th><th>ID Dip</th><th>Nome</th><th>Data</th><th>Riga</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th><th></th></tr></thead>
+      <thead><tr><th>ID Bat.</th><th>ID Dip</th><th>Nome</th><th>Data</th><th>Orario</th><th>Riga</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Note</th><th></th></tr></thead>
       <tbody id="tbody-arch">${righeB}</tbody>
       <tfoot id="tfoot-arch"></tfoot>
     </table></div>
@@ -1795,7 +1800,7 @@ async function filtraArch(){
   const ids=(ggs||[]).map(g=>g.ID_Turno);
   const riep=document.getElementById('arch-riepilogo');
   if(!ids.length){
-    document.getElementById('tbody-arch').innerHTML='<tr><td colspan="10" class="empty">Nessun risultato</td></tr>';
+    document.getElementById('tbody-arch').innerHTML='<tr><td colspan="11" class="empty">Nessun risultato</td></tr>';
     document.getElementById('tfoot-arch').innerHTML='';
     if(riep)riep.innerHTML='';
     return;
@@ -1816,21 +1821,26 @@ async function filtraArch(){
 
   document.getElementById('tbody-arch').innerHTML=(bats||[]).map(b=>{
     const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+    const orario=g?.OraInizio?`${g.OraInizio.slice(0,5)} - ${(g.OraFine||'').slice(0,5)}`:'—';
     return `<tr>
       <td><span class="bmov">${b.ID_Battesimo||b.id}</span></td>
       <td><span class="bid">${g?.ID_Dipendente||'—'}</span></td>
       <td>${nomeDip(g?.ID_Dipendente)}</td>
       <td>${g?.DataInizio||'—'}</td>
+      <td style="font-size:0.78rem;white-space:nowrap;">${orario}</td>
       <td>${b.OrdineRiga}</td>
       <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
       <td><strong>${b.OreBattezzate}h</strong></td>
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
-      <td><button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button></td>
-    </tr>`;}).join('')||'<tr><td colspan="10" class="empty">Nessun risultato</td></tr>';
+      <td style="display:flex;gap:4px;">
+        <button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button>
+        <button class="btn br bsm" onclick="eliminaTurnoCompletoDaArchivio(${g?.ID_Turno})" title="Elimina turno completo">✕</button>
+      </td>
+    </tr>`;}).join('')||'<tr><td colspan="11" class="empty">Nessun risultato</td></tr>';
 
   document.getElementById('tfoot-arch').innerHTML=(bats||[]).length?`<tr style="background:var(--sfondo);font-weight:800;">
-    <td colspan="7" style="text-align:right;">TOTALE ORE</td>
+    <td colspan="8" style="text-align:right;">TOTALE ORE</td>
     <td>${fmtN(totOreFiltrate,2)}h</td>
     <td colspan="2"></td>
   </tr>`:'';
@@ -1846,6 +1856,21 @@ async function modificaTurnoDaArchivio(idTurno){
   // Attendi rendering del tab
   await new Promise(r=>setTimeout(r,300));
   await modificaTurno(idTurno);
+}
+
+async function eliminaTurnoCompletoDaArchivio(idTurno){
+  if(!idTurno){toast('ID turno non trovato','err');return;}
+  if(!confirm("Eliminare l'intero turno e tutti i suoi battesimi? Questa azione non è reversibile."))return;
+  // Elimina prima i battesimi (FK), poi il turno
+  const{error:e1}=await sb.from('BattesimiTurno').delete().eq('ID_Turno',idTurno);
+  if(e1){toast('Errore eliminazione battesimi: '+e1.message,'err');return;}
+  const{error:e2}=await sb.from('TurniGiornalieri').delete().eq('ID_Turno',idTurno);
+  if(e2){toast('Errore eliminazione turno: '+e2.message,'err');return;}
+  toast('✔ Turno eliminato completamente','warn');
+  // Ricarica la vista corrente (riapplica i filtri se già impostati, altrimenti render iniziale)
+  const haFiltri=document.getElementById('f-dip');
+  if(haFiltri)await filtraArch();
+  else await renderArchivio();
 }
 
 // ============================================================
@@ -1915,6 +1940,10 @@ async function filtraArchivioOperativo(){
   ggs.forEach(g=>turnoById[g.ID_Turno]=g);
   const idTurni=ggs.map(g=>g.ID_Turno);
 
+  // Mappa dipendente -> contratto (usa _dips già caricati in memoria)
+  const contrattoByDip={};
+  _dips.forEach(d=>{if(d.ID_Contratto)contrattoByDip[d.ID_Dipendente]=d.ID_Contratto;});
+
   // Carica TUTTI i battesimi dei turni (serve l'ordine completo per calcolare gli offset nel turno)
   let batsAllTurno=[];
   {
@@ -1933,11 +1962,12 @@ async function filtraArchivioOperativo(){
   batsAllTurno.forEach(b=>{if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];batsByTurno[b.ID_Turno].push(b);});
   Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
 
-  // Aggrega per GIORNO: ore diurne/notturne (algebrico, per data di competenza), dipendenti coinvolti
+  // Aggrega per GIORNO: ore diurne/notturne totali + suddivise per contratto, dipendenti coinvolti
   const perGiorno={};
   Object.entries(batsByTurno).forEach(([idTurnoStr,bats])=>{
     const turno=turnoById[idTurnoStr];
     if(!turno)return;
+    const idContratto=contrattoByDip[turno.ID_Dipendente]||null;
     bats.forEach((bat,idx)=>{
       if(frep && bat.ID_Reparto!=frep)return;
       if(fatt && bat.ID_Attivita!=fatt)return;
@@ -1945,10 +1975,15 @@ async function filtraArchivioOperativo(){
       giorniCoinvolti.forEach(({data,oreGiorno,oreNotte})=>{
         if(dal&&data<dal)return;
         if(al&&data>al)return;
-        if(!perGiorno[data])perGiorno[data]={diurne:0,notturne:0,dipendenti:new Set()};
+        if(!perGiorno[data])perGiorno[data]={diurne:0,notturne:0,dipendenti:new Set(),perContratto:{}};
         perGiorno[data].diurne+=oreGiorno;
         perGiorno[data].notturne+=oreNotte;
         if(turno.ID_Dipendente)perGiorno[data].dipendenti.add(turno.ID_Dipendente);
+        if(idContratto){
+          if(!perGiorno[data].perContratto[idContratto])perGiorno[data].perContratto[idContratto]={diurne:0,notturne:0};
+          perGiorno[data].perContratto[idContratto].diurne+=oreGiorno;
+          perGiorno[data].perContratto[idContratto].notturne+=oreNotte;
+        }
       });
     });
   });
@@ -1962,16 +1997,48 @@ async function filtraArchivioOperativo(){
   const tuttiDip=new Set();
   giorni.forEach(d=>perGiorno[d].dipendenti.forEach(x=>tuttiDip.add(x)));
 
+  // Lista contratti effettivamente presenti nei dati, ordinati per ID per coerenza colonne
+  const contrattiUsati=_contratti.filter(c=>
+    giorni.some(d=>perGiorno[d].perContratto[c.ID_Contratto])
+  ).sort((a,b)=>a.ID_Contratto-b.ID_Contratto);
+
+  const headerContratti=contrattiUsati.map(c=>
+    `<th>Diurne ${c.NomeContratto}</th><th>Notturne ${c.NomeContratto}</th>`).join('');
+
   const righe=giorni.map(d=>{
     const v=perGiorno[d];
     const tot=v.diurne+v.notturne;
+    const celleContratti=contrattiUsati.map(c=>{
+      const cc=v.perContratto[c.ID_Contratto]||{diurne:0,notturne:0};
+      return `<td>${fmtN(cc.diurne,2)}h</td><td>${fmtN(cc.notturne,2)}h</td>`;
+    }).join('');
     return `<tr>
       <td>${fmtDataIT(d)}</td>
       <td><strong>${fmtN(tot,2)}h</strong></td>
       <td>${fmtN(v.diurne,2)}h</td>
       <td>${fmtN(v.notturne,2)}h</td>
+      ${celleContratti}
       <td>${v.dipendenti.size}</td>
     </tr>`;
+  }).join('');
+
+  // Totali per contratto (per il footer)
+  const totPerContratto={};
+  contrattiUsati.forEach(c=>{
+    totPerContratto[c.ID_Contratto]={diurne:0,notturne:0};
+    giorni.forEach(d=>{
+      const cc=perGiorno[d].perContratto[c.ID_Contratto];
+      if(cc){totPerContratto[c.ID_Contratto].diurne+=cc.diurne;totPerContratto[c.ID_Contratto].notturne+=cc.notturne;}
+    });
+  });
+  const footerContratti=contrattiUsati.map(c=>{
+    const t=totPerContratto[c.ID_Contratto];
+    return `<td>${fmtN(t.diurne,2)}h</td><td>${fmtN(t.notturne,2)}h</td>`;
+  }).join('');
+
+  const riepilogoContrattiHtml=contrattiUsati.map(c=>{
+    const t=totPerContratto[c.ID_Contratto];
+    return `<div style="margin-top:4px;">${c.NomeContratto} — Diurne: <strong style="color:var(--verde);">${fmtN(t.diurne,2)}h</strong> · Notturne: <strong style="color:var(--blu);">${fmtN(t.notturne,2)}h</strong></div>`;
   }).join('');
 
   cont.innerHTML=`
@@ -1982,17 +2049,19 @@ async function filtraArchivioOperativo(){
       Diurne: <strong style="color:var(--verde);">${fmtN(totDiurne,2)}h</strong> &nbsp;|&nbsp;
       Notturne: <strong style="color:var(--blu);">${fmtN(totNotturne,2)}h</strong>
     </div>
+    ${riepilogoContrattiHtml?`<div style="font-size:0.85rem;color:var(--grigio);margin-top:8px;border-top:1px solid var(--bordo);padding-top:8px;">${riepilogoContrattiHtml}</div>`:''}
   </div>
   <div class="card">
     <div class="ct">Dettaglio per giorno</div>
     <div class="tw"><table>
-      <thead><tr><th>Data</th><th>Ore totali</th><th>Ore diurne</th><th>Ore notturne</th><th>Dipendenti coinvolti</th></tr></thead>
+      <thead><tr><th>Data</th><th>Ore totali</th><th>Ore diurne</th><th>Ore notturne</th>${headerContratti}<th>Dipendenti coinvolti</th></tr></thead>
       <tbody>${righe}</tbody>
       <tfoot><tr style="background:var(--sfondo);font-weight:800;">
         <td style="text-align:right;">TOTALE</td>
         <td>${fmtN(totOre,2)}h</td>
         <td>${fmtN(totDiurne,2)}h</td>
         <td>${fmtN(totNotturne,2)}h</td>
+        ${footerContratti}
         <td>${tuttiDip.size}</td>
       </tr></tfoot>
     </table></div>
