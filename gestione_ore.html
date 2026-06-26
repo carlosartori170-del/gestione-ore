@@ -68,6 +68,16 @@ nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
 .navgroup-menu button:hover{background:var(--sfondo);color:var(--pm);}
 .navgroup-menu button.on{background:var(--sfondo);color:var(--pm);border-bottom-color:var(--sfondo);}
 .navgroup-menu button:last-child{border-bottom:none;border-radius:0 0 8px 8px;}
+
+/* Checkbox multi-select dropdown (Archivio Turni/Operativo/Produzione) */
+.ckwrap{position:relative;}
+.cktrigger{width:100%;border:1.5px solid var(--bordo);border-radius:8px;padding:9px 12px;font-size:0.85rem;background:var(--bianco);color:var(--testo);text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.cktrigger:after{content:'▾';color:var(--grigio);font-size:0.7rem;}
+.ckdropdown{display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--bianco);border:1.5px solid var(--bordo);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,0.15);max-height:260px;overflow-y:auto;z-index:100;padding:6px;}
+.ckdropdown.open{display:block;}
+.ckitem{display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:0.84rem;cursor:pointer;border-radius:5px;}
+.ckitem:hover{background:var(--sfondo);}
+.ckitem input{margin:0;cursor:pointer;}
 .navgroup.open .navgroup-menu{display:flex;}
 
 main{padding:20px 16px;max-width:1100px;margin:0 auto;}
@@ -198,7 +208,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v57</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v58</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -440,6 +450,37 @@ function optTipiProd(idRep='',sel=''){
   const f=idRep?_tipiProd.filter(t=>t.ID_Reparto==idRep):_tipiProd;
   return f.map(t=>`<option value="${t.ID_TipoProduzione}"${t.ID_TipoProduzione==sel?' selected':''}>${t.TipoProduzione} (${t.UnitaMisura})</option>`).join('');
 }
+
+// ============================================================
+// CHECKBOX MULTI-SELECT (riusato in Archivio Turni / Operativo / Produzione)
+// Dropdown a comparsa con checkbox per selezionare più reparti/attività insieme.
+// ============================================================
+function ckReparti(id){
+  return _reparti.map(r=>`<label class="ckitem"><input type="checkbox" value="${r.ID_Reparto}" data-grp="${id}">${r.NomeReparto}</label>`).join('');
+}
+function ckAttivita(id,idRepFiltro=''){
+  const f=idRepFiltro?_attivita.filter(a=>a.ID_Reparto==idRepFiltro):_attivita;
+  return f.map(a=>`<label class="ckitem"><input type="checkbox" value="${a.ID_Attivita}" data-grp="${id}">${a.NomeAttivita}</label>`).join('');
+}
+// Restituisce array di valori selezionati (stringhe) per un gruppo di checkbox dato il suo id contenitore
+function getCkValues(id){
+  return Array.from(document.querySelectorAll(`#${id} input[type=checkbox]:checked`)).map(el=>el.value);
+}
+// Aggiorna l'etichetta del trigger con il riepilogo della selezione (es. "3 selezionati" o "Tutti")
+function aggCkLabel(triggerId,id,placeholder){
+  const vals=getCkValues(id);
+  const el=document.getElementById(triggerId);
+  if(el)el.textContent=vals.length?`${vals.length} selezionat${vals.length===1?'o':'i'}`:placeholder;
+}
+function toggleCkDropdown(id){
+  document.querySelectorAll('.ckdropdown.open').forEach(d=>{if(d.id!==id)d.classList.remove('open');});
+  document.getElementById(id)?.classList.toggle('open');
+}
+document.addEventListener('click',(e)=>{
+  if(!e.target.closest('.ckwrap')){
+    document.querySelectorAll('.ckdropdown.open').forEach(d=>d.classList.remove('open'));
+  }
+});
 
 // ============================================================
 // TAB: ORE RAPIDE
@@ -1577,32 +1618,37 @@ async function renderReportProduzione(){
   <div class="card">
     <div class="ct">Filtri</div>
     <div class="g4">
-      <div class="fg"><label>Dal</label><input id="rp-dal" type="date"></div>
-      <div class="fg"><label>Al</label><input id="rp-al" type="date"></div>
-      <div class="fg"><label>Reparto</label><select id="rp-rep"><option value="">Tutti</option>${optReps()}</select></div>
-      <div class="fg"><label>Turno</label><select id="rp-turno"><option value="">Tutti</option><option value="false">Diurno</option><option value="true">Notturno</option></select></div>
+      <div class="fg"><label>Dal</label><input id="arp-dal" type="date"></div>
+      <div class="fg"><label>Al</label><input id="arp-al" type="date"></div>
+      <div class="fg ckwrap">
+        <label>Reparto</label>
+        <button type="button" class="cktrigger" id="arp-rep-trigger" onclick="toggleCkDropdown('arp-rep-ck')">Tutti</button>
+        <div class="ckdropdown" id="arp-rep-ck">${ckReparti('arp-rep-ck')}</div>
+      </div>
+      <div class="fg"><label>Turno</label><select id="arp-turno"><option value="">Tutti</option><option value="false">Diurno</option><option value="true">Notturno</option></select></div>
     </div>
     <div class="brow">
       <button class="btn bp bsm" onclick="filtraReportProd()">🔍 Filtra</button>
       <button class="btn bo bsm" onclick="resetFiltriProd()">✕ Reset</button>
     </div>
   </div>
-  <div id="rp-results"><div class="empty" style="padding:32px;text-align:center;">Usa i filtri per cercare le produzioni</div></div>`;
+  <div id="arp-results"><div class="empty" style="padding:32px;text-align:center;">Usa i filtri per cercare le produzioni</div></div>`;
 }
 
 async function filtraReportProd(){
-  const dal=document.getElementById('rp-dal')?.value||'';
-  const al=document.getElementById('rp-al')?.value||'';
-  const frep=document.getElementById('rp-rep')?.value||'';
-  const fturno=document.getElementById('rp-turno')?.value||'';
-  const cont=document.getElementById('rp-results');
+  const dal=document.getElementById('arp-dal')?.value||'';
+  const al=document.getElementById('arp-al')?.value||'';
+  const freps=getCkValues('arp-rep-ck');
+  aggCkLabel('arp-rep-trigger','arp-rep-ck','Tutti');
+  const fturno=document.getElementById('arp-turno')?.value||'';
+  const cont=document.getElementById('arp-results');
   if(!cont)return;
   cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
 
   let q=sb.from('ProduzioneReparti').select('*').order('DataProduzione',{ascending:false});
   if(dal)q=q.gte('DataProduzione',dal);
   if(al)q=q.lte('DataProduzione',al);
-  if(frep)q=q.eq('ID_Reparto',frep);
+  if(freps.length)q=q.in('ID_Reparto',freps);
   if(fturno!=='')q=q.eq('Notturno',fturno==='true');
   const{data:prods,error}=await q;
 
@@ -1661,8 +1707,10 @@ async function filtraReportProd(){
 }
 
 function resetFiltriProd(){
-  ['rp-dal','rp-al','rp-rep','rp-turno'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  const r=document.getElementById('rp-results');
+  ['arp-dal','arp-al','arp-turno'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.querySelectorAll('#arp-rep-ck input[type=checkbox]').forEach(cb=>cb.checked=false);
+  aggCkLabel('arp-rep-trigger','arp-rep-ck','Tutti');
+  const r=document.getElementById('arp-results');
   if(r)r.innerHTML='<div class="empty" style="padding:32px;text-align:center;">Usa i filtri per cercare le produzioni</div>';
 }
 
@@ -1764,8 +1812,16 @@ async function renderArchivio(){
       <div class="fg"><label>Dipendente</label><select id="f-dip"><option value="">Tutti</option>${optDips()}</select></div>
       <div class="fg"><label>Dal</label><input id="f-dal" type="date"></div>
       <div class="fg"><label>Al</label><input id="f-al" type="date"></div>
-      <div class="fg"><label>Reparto</label><select id="f-rep" onchange="aggFiltraAtt()"><option value="">Tutti</option>${optReps()}</select></div>
-      <div class="fg"><label>Attività</label><select id="f-att"><option value="">Tutte</option>${optAtts()}</select></div>
+      <div class="fg ckwrap">
+        <label>Reparto</label>
+        <button type="button" class="cktrigger" id="f-rep-trigger" onclick="toggleCkDropdown('f-rep-ck')">Tutti</button>
+        <div class="ckdropdown" id="f-rep-ck">${ckReparti('f-rep-ck')}</div>
+      </div>
+      <div class="fg ckwrap">
+        <label>Attività</label>
+        <button type="button" class="cktrigger" id="f-att-trigger" onclick="toggleCkDropdown('f-att-ck')">Tutte</button>
+        <div class="ckdropdown" id="f-att-ck">${ckAttivita('f-att-ck')}</div>
+      </div>
     </div>
     <div class="brow"><button class="btn bp bsm" onclick="filtraArch()">🔍 Filtra</button></div>
   </div>
@@ -1780,18 +1836,14 @@ async function renderArchivio(){
   </div>`;
 }
 
-function aggFiltraAtt(){
-  const rep=document.getElementById('f-rep')?.value||'';
-  const el=document.getElementById('f-att');
-  if(el)el.innerHTML='<option value="">Tutte</option>'+optAtts(rep);
-}
-
 async function filtraArch(){
   const fd=document.getElementById('f-dip')?.value||'';
   const dal=document.getElementById('f-dal')?.value||'';
   const al=document.getElementById('f-al')?.value||'';
-  const frep=document.getElementById('f-rep')?.value||'';
-  const fatt=document.getElementById('f-att')?.value||'';
+  const freps=getCkValues('f-rep-ck'); // array di ID_Reparto selezionati (vuoto = tutti)
+  const fatts=getCkValues('f-att-ck'); // array di ID_Attivita selezionati (vuoto = tutte)
+  aggCkLabel('f-rep-trigger','f-rep-ck','Tutti');
+  aggCkLabel('f-att-trigger','f-att-ck','Tutte');
   let qgg=sb.from('TurniGiornalieri').select('*');
   if(fd)qgg=qgg.eq('ID_Dipendente',fd);
   if(dal)qgg=qgg.gte('DataInizio',dal);
@@ -1806,8 +1858,8 @@ async function filtraArch(){
     return;
   }
   let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',ids);
-  if(frep)qb=qb.eq('ID_Reparto',frep);
-  if(fatt)qb=qb.eq('ID_Attivita',fatt);
+  if(freps.length)qb=qb.in('ID_Reparto',freps);
+  if(fatts.length)qb=qb.in('ID_Attivita',fatts);
   const{data:bats}=await qb;
 
   const totOreFiltrate=(bats||[]).reduce((a,b)=>a+(b.OreBattezzate||0),0);
@@ -1886,25 +1938,29 @@ async function renderArchivioOperativo(){
     <div class="g4">
       <div class="fg"><label>Dal</label><input id="ao-dal" type="date"></div>
       <div class="fg"><label>Al</label><input id="ao-al" type="date"></div>
-      <div class="fg"><label>Reparto</label><select id="ao-rep" onchange="aggAoAtt()"><option value="">Tutti</option>${optReps()}</select></div>
-      <div class="fg"><label>Attività</label><select id="ao-att"><option value="">Tutte</option>${optAtts()}</select></div>
+      <div class="fg ckwrap">
+        <label>Reparto</label>
+        <button type="button" class="cktrigger" id="ao-rep-trigger" onclick="toggleCkDropdown('ao-rep-ck')">Tutti</button>
+        <div class="ckdropdown" id="ao-rep-ck">${ckReparti('ao-rep-ck')}</div>
+      </div>
+      <div class="fg ckwrap">
+        <label>Attività</label>
+        <button type="button" class="cktrigger" id="ao-att-trigger" onclick="toggleCkDropdown('ao-att-ck')">Tutte</button>
+        <div class="ckdropdown" id="ao-att-ck">${ckAttivita('ao-att-ck')}</div>
+      </div>
     </div>
     <div class="brow"><button class="btn bp bsm" onclick="filtraArchivioOperativo()">🔍 Filtra</button></div>
   </div>
   <div id="ao-content"><div class="empty" style="padding:32px;text-align:center;">Imposta i filtri e clicca "Filtra"</div></div>`;
 }
 
-function aggAoAtt(){
-  const rep=document.getElementById('ao-rep')?.value||'';
-  const el=document.getElementById('ao-att');
-  if(el)el.innerHTML='<option value="">Tutte</option>'+optAtts(rep);
-}
-
 async function filtraArchivioOperativo(){
   const dal=document.getElementById('ao-dal')?.value||'';
   const al=document.getElementById('ao-al')?.value||'';
-  const frep=document.getElementById('ao-rep')?.value||'';
-  const fatt=document.getElementById('ao-att')?.value||'';
+  const freps=getCkValues('ao-rep-ck');
+  const fatts=getCkValues('ao-att-ck');
+  aggCkLabel('ao-rep-trigger','ao-rep-ck','Tutti');
+  aggCkLabel('ao-att-trigger','ao-att-ck','Tutte');
   const cont=document.getElementById('ao-content');
   cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
 
@@ -1969,8 +2025,8 @@ async function filtraArchivioOperativo(){
     if(!turno)return;
     const idContratto=contrattoByDip[turno.ID_Dipendente]||null;
     bats.forEach((bat,idx)=>{
-      if(frep && bat.ID_Reparto!=frep)return;
-      if(fatt && bat.ID_Attivita!=fatt)return;
+      if(freps.length && !freps.includes(String(bat.ID_Reparto)))return;
+      if(fatts.length && !fatts.includes(String(bat.ID_Attivita)))return;
       const giorniCoinvolti=_giorniDelBattesimo(turno,bats,idx);
       giorniCoinvolti.forEach(({data,oreGiorno,oreNotte})=>{
         if(dal&&data<dal)return;
