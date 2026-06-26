@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v59</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v60</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -303,7 +303,18 @@ async function doLogin(){
     const{data,error}=await sb.from('Utenti').select('*').eq('Username',user).eq('Password',pass);
     if(error)throw error;
     if(!data||!data.length){err.textContent='Username o password errati.';return;}
-    ME={username:data[0].Username,ruolo:data[0].Ruolo,magazzini:data[0].Magazzini_Accessibili||[1]};
+    // Magazzini_Accessibili può arrivare come array nativo, oppure come stringa
+    // (formato Postgres "{1,2}" o JSON "[1,2]") a seconda della versione del client — normalizza in ogni caso
+    let magRaw=data[0].Magazzini_Accessibili;
+    let magArr=[1];
+    if(Array.isArray(magRaw)){
+      magArr=magRaw.map(Number);
+    }else if(typeof magRaw==='string'){
+      magArr=magRaw.replace(/[{}\[\]]/g,'').split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n));
+    }
+    if(!magArr.length)magArr=[1];
+    ME={username:data[0].Username,ruolo:data[0].Ruolo,magazzini:magArr};
+    console.log('DEBUG magazzini utente:',magArr,'da raw:',magRaw);
     err.textContent='';
 
     // Carica elenco magazzini (per nomi nelle card/selettore)
