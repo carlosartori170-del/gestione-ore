@@ -198,7 +198,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v56</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v57</span></h1>
     </div>
     <div class="hright">
       <span class="rbadge" id="rbadge">—</span>
@@ -2002,21 +2002,24 @@ async function filtraArchivioOperativo(){
     giorni.some(d=>perGiorno[d].perContratto[c.ID_Contratto])
   ).sort((a,b)=>a.ID_Contratto-b.ID_Contratto);
 
-  const headerContratti=contrattiUsati.map(c=>
-    `<th>Diurne ${c.NomeContratto}</th><th>Notturne ${c.NomeContratto}</th>`).join('');
+  // Intestazioni compatte: riga sopra = nome contratto (colspan 2), riga sotto = Diu./Not.
+  const headerContrattiTop=contrattiUsati.map(c=>
+    `<th colspan="2" style="text-align:center;border-left:2px solid var(--bordo);">${c.NomeContratto}</th>`).join('');
+  const headerContrattiSub=contrattiUsati.map(c=>
+    `<th style="border-left:2px solid var(--bordo);">Diu.</th><th>Not.</th>`).join('');
 
   const righe=giorni.map(d=>{
     const v=perGiorno[d];
     const tot=v.diurne+v.notturne;
     const celleContratti=contrattiUsati.map(c=>{
       const cc=v.perContratto[c.ID_Contratto]||{diurne:0,notturne:0};
-      return `<td>${fmtN(cc.diurne,2)}h</td><td>${fmtN(cc.notturne,2)}h</td>`;
+      return `<td style="border-left:2px solid var(--bordo);">${fmtN(cc.diurne,1)}</td><td>${fmtN(cc.notturne,1)}</td>`;
     }).join('');
     return `<tr>
       <td>${fmtDataIT(d)}</td>
-      <td><strong>${fmtN(tot,2)}h</strong></td>
-      <td>${fmtN(v.diurne,2)}h</td>
-      <td>${fmtN(v.notturne,2)}h</td>
+      <td><strong>${fmtN(tot,1)}</strong></td>
+      <td>${fmtN(v.diurne,1)}</td>
+      <td>${fmtN(v.notturne,1)}</td>
       ${celleContratti}
       <td>${v.dipendenti.size}</td>
     </tr>`;
@@ -2033,7 +2036,7 @@ async function filtraArchivioOperativo(){
   });
   const footerContratti=contrattiUsati.map(c=>{
     const t=totPerContratto[c.ID_Contratto];
-    return `<td>${fmtN(t.diurne,2)}h</td><td>${fmtN(t.notturne,2)}h</td>`;
+    return `<td style="border-left:2px solid var(--bordo);">${fmtN(t.diurne,1)}</td><td>${fmtN(t.notturne,1)}</td>`;
   }).join('');
 
   const riepilogoContrattiHtml=contrattiUsati.map(c=>{
@@ -2052,15 +2055,25 @@ async function filtraArchivioOperativo(){
     ${riepilogoContrattiHtml?`<div style="font-size:0.85rem;color:var(--grigio);margin-top:8px;border-top:1px solid var(--bordo);padding-top:8px;">${riepilogoContrattiHtml}</div>`:''}
   </div>
   <div class="card">
-    <div class="ct">Dettaglio per giorno</div>
-    <div class="tw"><table>
-      <thead><tr><th>Data</th><th>Ore totali</th><th>Ore diurne</th><th>Ore notturne</th>${headerContratti}<th>Dipendenti coinvolti</th></tr></thead>
+    <div class="ct">Dettaglio per giorno <span style="font-weight:400;font-size:0.74rem;color:var(--grigio);">(ore in formato decimale, es. 1.5 = 1h30)</span></div>
+    <div class="tw" style="overflow-x:auto;"><table style="font-size:0.76rem;white-space:nowrap;">
+      <thead>
+        <tr>
+          <th rowspan="2" style="vertical-align:bottom;">Data</th>
+          <th rowspan="2" style="vertical-align:bottom;">Tot.</th>
+          <th rowspan="2" style="vertical-align:bottom;">Diu.</th>
+          <th rowspan="2" style="vertical-align:bottom;">Not.</th>
+          ${headerContrattiTop}
+          <th rowspan="2" style="vertical-align:bottom;">Dip.</th>
+        </tr>
+        <tr>${headerContrattiSub}</tr>
+      </thead>
       <tbody>${righe}</tbody>
       <tfoot><tr style="background:var(--sfondo);font-weight:800;">
-        <td style="text-align:right;">TOTALE</td>
-        <td>${fmtN(totOre,2)}h</td>
-        <td>${fmtN(totDiurne,2)}h</td>
-        <td>${fmtN(totNotturne,2)}h</td>
+        <td style="text-align:right;">TOT</td>
+        <td>${fmtN(totOre,1)}</td>
+        <td>${fmtN(totDiurne,1)}</td>
+        <td>${fmtN(totNotturne,1)}</td>
         ${footerContratti}
         <td>${tuttiDip.size}</td>
       </tr></tfoot>
