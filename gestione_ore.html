@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v71</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v72</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -2735,10 +2735,82 @@ async function renderConfig(){
     </p>
     <button class="btn br bsm" onclick="controllaAnomalieTurni()">Avvia controllo</button>
     <div id="anomalie-result" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- BACKUP COMPLETO -->
+  <div class="card" style="border-color:var(--blu);">
+    <div class="ct" style="color:var(--blu);">💾 Backup completo del database</div>
+    <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">
+      Scarica un file con TUTTI i dati di TUTTE le tabelle (entrambi i magazzini), in formato JSON. Conservalo in un posto sicuro (es. Google Drive) — in caso di problemi al database, questo file permette di ricostruire tutto da zero. Si consiglia di farlo con regolarità (es. ogni settimana).
+    </p>
+    <button class="btn bp bsm" onclick="scaricaBackupCompleto()">⬇ Scarica backup completo</button>
+    <div id="backup-msg" style="margin-top:10px;"></div>
   </div>`:''}`;
 
   // Carica tutte le tariffe (solo admin: il responsabile non ha le tabelle nel DOM)
   if(isAdmin)await caricaTariffe();
+}
+
+async function scaricaBackupCompleto(){
+  const msg=document.getElementById('backup-msg');
+  msg.innerHTML='<div class="loading">⏳ Esportazione in corso, può richiedere qualche secondo...</div>';
+
+  // Elenco di tutte le tabelle da esportare. Le tabelle con molte righe (Turni/Battesimi/Produzione)
+  // vengono lette a blocchi da 1000 per evitare limiti di Supabase.
+  async function fetchAll(tableName, orderCol){
+    let all=[];
+    let lastId=0;
+    while(true){
+      let q=sb.from(tableName).select('*');
+      if(orderCol)q=q.gt(orderCol,lastId).order(orderCol,{ascending:true});
+      q=q.limit(1000);
+      const{data,error}=await q;
+      if(error){console.error(`Errore backup tabella ${tableName}:`,error);break;}
+      if(!data||!data.length)break;
+      all=[...all,...data];
+      if(data.length<1000||!orderCol)break;
+      lastId=data[data.length-1][orderCol];
+    }
+    return all;
+  }
+
+  try{
+    const backup={
+      data_backup:new Date().toISOString(),
+      versione_app:'v71',
+      Magazzini:await fetchAll('Magazzini'),
+      Dipendenti:await fetchAll('Dipendenti','ID_Dipendente'),
+      Reparti:await fetchAll('Reparti','ID_Reparto'),
+      Attivita:await fetchAll('Attivita','ID_Attivita'),
+      Contratti:await fetchAll('Contratti'),
+      Livelli:await fetchAll('Livelli'),
+      TipiProduzione:await fetchAll('TipiProduzione','ID_TipoProduzione'),
+      TurniGiornalieri:await fetchAll('TurniGiornalieri','ID_Turno'),
+      BattesimiTurno:await fetchAll('BattesimiTurno','ID_Battesimo'),
+      BattesimiPreTurno:await fetchAll('BattesimiPreTurno'),
+      ProduzioneReparti:await fetchAll('ProduzioneReparti','ID_Produzione'),
+      ProduzioneOperatori:await fetchAll('ProduzioneOperatori'),
+      TariffeEconomia:await fetchAll('TariffeEconomia'),
+      TariffeProduzione:await fetchAll('TariffeProduzione','ID_Tariffa'),
+      CostiMezziReparti:await fetchAll('CostiMezziReparti'),
+      Utenti:await fetchAll('Utenti')
+    };
+
+    const json=JSON.stringify(backup,null,2);
+    const blob=new Blob([json],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const oggi=new Date();
+    const nomeFile=`backup_nexus_${oggi.getFullYear()}-${String(oggi.getMonth()+1).padStart(2,'0')}-${String(oggi.getDate()).padStart(2,'0')}.json`;
+    a.href=url;a.download=nomeFile;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    const totRighe=Object.values(backup).filter(Array.isArray).reduce((a,arr)=>a+arr.length,0);
+    msg.innerHTML=`<div class="alert aok">✔ Backup scaricato: ${nomeFile} (${totRighe} righe totali su tutte le tabelle)</div>`;
+  }catch(e){
+    msg.innerHTML=`<div class="alert aerr">Errore durante il backup: ${e.message}</div>`;
+  }
 }
 
 async function controllaAnomalieTurni(){
