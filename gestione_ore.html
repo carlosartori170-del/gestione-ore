@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v69</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v70</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -1951,6 +1951,17 @@ async function filtraArch(){
   const fatts=getCkValues('f-att-ck'); // array di ID_Attivita selezionati (vuoto = tutte)
   aggCkLabel('f-rep-trigger','f-rep-ck','Tutti');
   aggCkLabel('f-att-trigger','f-att-ck','Tutte');
+
+  // Estende il filtro di 2gg prima e 1g dopo per catturare turni a cavallo di mezzanotte
+  // (stesso criterio "data di competenza" usato nel Conto Economico e Archivio Operativo)
+  function addDays(dateStr, days){
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+days);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  const dalExt=dal?addDays(dal,-2):null;
+  const alExt=al?addDays(al,1):null;
+
   let ggs=[];
   {
     let lastId=0;
@@ -1958,8 +1969,8 @@ async function filtraArch(){
       let qgg=sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO)
         .gt('ID_Turno',lastId).order('ID_Turno',{ascending:true}).limit(1000);
       if(fd)qgg=qgg.eq('ID_Dipendente',fd);
-      if(dal)qgg=qgg.gte('DataInizio',dal);
-      if(al)qgg=qgg.lte('DataInizio',al);
+      if(dalExt)qgg=qgg.gte('DataInizio',dalExt);
+      if(alExt)qgg=qgg.lte('DataInizio',alExt);
       const{data:batch,error}=await qgg;
       if(error){console.error('Errore paginazione turni archivio:',error);break;}
       if(!batch||!batch.length)break;
@@ -1968,7 +1979,9 @@ async function filtraArch(){
       lastId=batch[batch.length-1].ID_Turno;
     }
   }
-  const ids=(ggs||[]).map(g=>g.ID_Turno);
+  const turnoById={};
+  ggs.forEach(g=>turnoById[g.ID_Turno]=g);
+  const ids=ggs.map(g=>g.ID_Turno);
   const riep=document.getElementById('arch-riepilogo');
   if(!ids.length){
     document.getElementById('tbody-arch').innerHTML='<tr><td colspan="11" class="empty">Nessun risultato</td></tr>';
@@ -1976,45 +1989,76 @@ async function filtraArch(){
     if(riep)riep.innerHTML='';
     return;
   }
-  let bats=[];
+
+  // Carica TUTTI i battesimi dei turni (serve l'ordine completo del turno per calcolare gli offset, anche
+  // se poi si filtra per reparto/attività solo sulle righe da mostrare)
+  let batsAllTurno=[];
   {
     const chunkSize=300; // PostgREST ha un limite di lunghezza URL — chunk per evitare troncamenti silenziosi
     const chunks=[];
     for(let i=0;i<ids.length;i+=chunkSize)chunks.push(ids.slice(i,i+chunkSize));
-    const results=await Promise.all(chunks.map(chunk=>{
-      let q=sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk);
-      if(freps.length)q=q.in('ID_Reparto',freps);
-      if(fatts.length)q=q.in('ID_Attivita',fatts);
-      return q;
-    }));
+    const results=await Promise.all(chunks.map(chunk=>
+      sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk)
+    ));
     results.forEach(({data,error})=>{
       if(error)console.error('Errore chunk battesimi:',error);
-      if(data&&data.length)bats=[...bats,...data];
+      if(data&&data.length)batsAllTurno=[...batsAllTurno,...data];
     });
   }
 
-  const totOreFiltrate=(bats||[]).reduce((a,b)=>a+(b.OreBattezzate||0),0);
+  // Raggruppa per turno in ordine cronologico (necessario per calcolare l'offset di ciascun battesimo)
+  const batsByTurno={};
+  batsAllTurno.forEach(b=>{if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];batsByTurno[b.ID_Turno].push(b);});
+  Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
+
+  // Spezza ogni battesimo in righe per data di competenza (stessa logica di Access: un turno
+  // che attraversa la mezzanotte genera righe separate sui giorni toccati)
+  const righe=[];
+  Object.entries(batsByTurno).forEach(([idTurnoStr,bats])=>{
+    const turno=turnoById[idTurnoStr];
+    if(!turno)return;
+    bats.forEach((bat,idx)=>{
+      if(freps.length && !freps.includes(String(bat.ID_Reparto)))return;
+      if(fatts.length && !fatts.includes(String(bat.ID_Attivita)))return;
+      const giorniCoinvolti=_giorniDelBattesimo(turno,bats,idx);
+      giorniCoinvolti.forEach(({data,oreGiorno,oreNotte})=>{
+        if(dal&&data<dal)return;
+        if(al&&data>al)return;
+        const oreSegmento=oreGiorno+oreNotte;
+        if(oreSegmento<=0)return;
+        righe.push({
+          dataCompetenza:data,
+          turno,bat,
+          ore:oreSegmento
+        });
+      });
+    });
+  });
+
+  righe.sort((a,b)=>a.dataCompetenza.localeCompare(b.dataCompetenza)||a.turno.ID_Turno-b.turno.ID_Turno);
+
+  const totOreFiltrate=righe.reduce((a,r)=>a+r.ore,0);
 
   // Riepilogo sopra
   if(riep)riep.innerHTML=`
   <div class="card" style="margin-bottom:14px;background:var(--sfondo);">
-    <div style="font-size:0.85rem;color:var(--grigio);">Risultati filtrati: <strong>${(bats||[]).length}</strong> battesimi</div>
+    <div style="font-size:0.85rem;color:var(--grigio);">Risultati filtrati: <strong>${righe.length}</strong> righe (per data di competenza)</div>
     <div style="font-size:1.6rem;font-weight:800;color:var(--verde);margin-top:4px;">${fmtN(totOreFiltrate,2)}h <span style="font-size:0.85rem;font-weight:500;color:var(--grigio);">ore totali nel filtro</span></div>
   </div>`;
 
-  document.getElementById('tbody-arch').innerHTML=(bats||[]).map(b=>{
-    const g=(ggs||[]).find(x=>x.ID_Turno===b.ID_Turno);
+  document.getElementById('tbody-arch').innerHTML=righe.map(r=>{
+    const g=r.turno, b=r.bat;
     const orario=g?.OraInizio?`${g.OraInizio.slice(0,5)} - ${(g.OraFine||'').slice(0,5)}`:'—';
     return `<tr>
       <td><span class="bmov">${b.ID_Battesimo||b.id}</span></td>
       <td><span class="bid">${g?.ID_Dipendente||'—'}</span></td>
       <td>${nomeDip(g?.ID_Dipendente)}</td>
-      <td>${g?.DataInizio||'—'}</td>
+      <td>${fmtDataIT(r.dataCompetenza)}</td>
       <td style="font-size:0.78rem;white-space:nowrap;">${orario}</td>
       <td>${b.OrdineRiga}</td>
       <td><span class="pill py">${nomeRep(b.ID_Reparto)}</span></td>
       <td><span class="pill pg">${nomeAtt(b.ID_Attivita)}</span></td>
-      <td><strong>${b.OreBattezzate}h</strong></td>
+      <td><strong>${fmtN(r.ore,2)}h</strong></td>
       <td style="font-size:0.76rem;color:var(--grigio);">${b.Note||'—'}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn bo bsm" onclick="modificaTurnoDaArchivio(${g?.ID_Turno})" title="Modifica turno">✏</button>
@@ -2022,7 +2066,7 @@ async function filtraArch(){
       </td>
     </tr>`;}).join('')||'<tr><td colspan="11" class="empty">Nessun risultato</td></tr>';
 
-  document.getElementById('tfoot-arch').innerHTML=(bats||[]).length?`<tr style="background:var(--sfondo);font-weight:800;">
+  document.getElementById('tfoot-arch').innerHTML=righe.length?`<tr style="background:var(--sfondo);font-weight:800;">
     <td colspan="8" style="text-align:right;">TOTALE ORE</td>
     <td>${fmtN(totOreFiltrate,2)}h</td>
     <td colspan="2"></td>
