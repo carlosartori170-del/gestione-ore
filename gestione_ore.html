@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v67</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v68</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -1964,10 +1964,22 @@ async function filtraArch(){
     if(riep)riep.innerHTML='';
     return;
   }
-  let qb=sb.from('BattesimiTurno').select('*').in('ID_Turno',ids);
-  if(freps.length)qb=qb.in('ID_Reparto',freps);
-  if(fatts.length)qb=qb.in('ID_Attivita',fatts);
-  const{data:bats}=await qb;
+  let bats=[];
+  {
+    const chunkSize=300; // PostgREST ha un limite di lunghezza URL — chunk per evitare troncamenti silenziosi
+    const chunks=[];
+    for(let i=0;i<ids.length;i+=chunkSize)chunks.push(ids.slice(i,i+chunkSize));
+    const results=await Promise.all(chunks.map(chunk=>{
+      let q=sb.from('BattesimiTurno').select('*').in('ID_Turno',chunk);
+      if(freps.length)q=q.in('ID_Reparto',freps);
+      if(fatts.length)q=q.in('ID_Attivita',fatts);
+      return q;
+    }));
+    results.forEach(({data,error})=>{
+      if(error)console.error('Errore chunk battesimi:',error);
+      if(data&&data.length)bats=[...bats,...data];
+    });
+  }
 
   const totOreFiltrate=(bats||[]).reduce((a,b)=>a+(b.OreBattezzate||0),0);
 
