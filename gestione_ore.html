@@ -80,15 +80,15 @@ nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
 .ckitem input{margin:0;cursor:pointer;}
 
 /* Tabellone Giornaliero */
-.tg-table{border-collapse:collapse;font-size:0.72rem;}
+.tg-table{border-collapse:collapse;font-size:0.66rem;}
 .tg-table th,.tg-table td{border:1px solid var(--bordo);padding:0;}
-.tg-dipname-header{position:sticky;left:0;background:var(--sfondo);z-index:5;min-width:150px;padding:6px 10px!important;text-align:left;font-weight:800;}
-.tg-dipname{position:sticky;left:0;background:var(--bianco);z-index:4;min-width:150px;padding:5px 10px;font-size:0.76rem;font-weight:600;white-space:nowrap;border-right:2px solid var(--bordo);}
-.tg-th{font-size:0.6rem;color:var(--grigio);text-align:center;font-weight:500;padding:2px 0;}
+.tg-dipname-header{position:sticky;left:0;background:var(--sfondo);z-index:5;min-width:130px;padding:6px 8px!important;text-align:left;font-weight:800;}
+.tg-dipname{position:sticky;left:0;background:var(--bianco);z-index:4;min-width:130px;padding:4px 8px;font-size:0.72rem;font-weight:600;white-space:nowrap;border-right:2px solid var(--bordo);overflow:hidden;text-overflow:ellipsis;}
+.tg-th{font-size:0.52rem;color:var(--grigio);text-align:center;font-weight:500;padding:1px 0;width:8px;min-width:8px;}
 .tg-th-ora{font-weight:800;color:var(--testo);border-left:1.5px solid var(--p);}
-.tg-cell{height:26px;color:white;font-size:0.62rem;text-align:center;overflow:hidden;white-space:nowrap;cursor:default;}
-.tg-cell-empty{height:26px;background:repeating-linear-gradient(45deg,#f8f8f8,#f8f8f8 4px,#f0f0f0 4px,#f0f0f0 8px);}
-.tg-label{padding:0 3px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+.tg-cell{height:20px;color:white;font-size:0.58rem;text-align:center;overflow:hidden;white-space:nowrap;cursor:default;}
+.tg-cell-empty{height:20px;background:repeating-linear-gradient(45deg,#f8f8f8,#f8f8f8 4px,#f0f0f0 4px,#f0f0f0 8px);}
+.tg-label{padding:0 2px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 
 /* Selezione magazzino */
 .magcard{border:1.5px solid var(--bordo);border-radius:10px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:all 0.15s;text-align:left;background:white;width:100%;}
@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v74</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v75</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -2526,19 +2526,42 @@ async function renderTabelloneGiornaliero(){
   mc.innerHTML=`
   <div class="card">
     <div class="ct">${ICO.ttabellone} Tabellone giornaliero</div>
-    <div class="g2" style="max-width:340px;">
+    <div class="g4">
       <div class="fg"><label>Data</label><input id="tg-data" type="date" value="${oggi()}"></div>
-      <div style="display:flex;align-items:end;"><button class="btn bp bsm" onclick="caricaTabelloneGiornaliero()" style="width:100%;">🔍 Visualizza</button></div>
+      <div class="fg ckwrap">
+        <label>Reparto</label>
+        <button type="button" class="cktrigger" id="tg-rep-trigger" onclick="toggleCkDropdown('tg-rep-ck')">Tutti</button>
+        <div class="ckdropdown" id="tg-rep-ck">${ckReparti('tg-rep-ck')}</div>
+      </div>
+      <div class="fg ckwrap">
+        <label>Attività</label>
+        <button type="button" class="cktrigger" id="tg-att-trigger" onclick="toggleCkDropdown('tg-att-ck')">Tutte</button>
+        <div class="ckdropdown" id="tg-att-ck">${ckAttivita('tg-att-ck')}</div>
+      </div>
+      <div class="fg"><label>Cerca dipendente</label><input id="tg-cerca" type="text" placeholder="Nome..." oninput="filtraRigheTabellone()"></div>
+    </div>
+    <div class="brow" style="align-items:center;">
+      <button class="btn bp bsm" onclick="caricaTabelloneGiornaliero()">🔍 Visualizza</button>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;margin-left:10px;">
+        <input type="checkbox" id="tg-solo-turno" onchange="filtraRigheTabellone()"> Mostra solo dipendenti con turno in questa giornata
+      </label>
     </div>
   </div>
   <div id="tg-content"><div class="empty" style="padding:32px;text-align:center;">Seleziona una data e clicca Visualizza</div></div>`;
 }
+
+let _tgRigheCache=[]; // cache delle righe calcolate, per poter rifiltrare senza ricaricare dal DB
 
 async function caricaTabelloneGiornaliero(){
   const data=document.getElementById('tg-data')?.value;
   const cont=document.getElementById('tg-content');
   if(!data){cont.innerHTML='<div class="empty">Seleziona una data.</div>';return;}
   cont.innerHTML='<div class="loading">⏳ Caricamento...</div>';
+
+  const freps=getCkValues('tg-rep-ck');
+  const fatts=getCkValues('tg-att-ck');
+  aggCkLabel('tg-rep-trigger','tg-rep-ck','Tutti');
+  aggCkLabel('tg-att-trigger','tg-att-ck','Tutte');
 
   // Estende il caricamento di 1 giorno prima per catturare turni notturni che iniziano il giorno
   // precedente e proseguono nella data selezionata
@@ -2567,8 +2590,6 @@ async function caricaTabelloneGiornaliero(){
     results.forEach(({data:d})=>{if(d&&d.length)bats=[...bats,...d];});
   }
 
-  const turnoById={};
-  (ggs||[]).forEach(g=>turnoById[g.ID_Turno]=g);
   const batsByTurno={};
   bats.forEach(b=>{if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];batsByTurno[b.ID_Turno].push(b);});
   Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
@@ -2580,22 +2601,24 @@ async function caricaTabelloneGiornaliero(){
 
   const righeTabellone=dipMagazzino.map(dip=>{
     const slots=new Array(SLOTS).fill(null);
+    let haTurno=false;
     // Trova tutti i turni di questo dipendente tra dataPrec e data
     const turniDip=(ggs||[]).filter(g=>g.ID_Dipendente===dip.ID_Dipendente);
     turniDip.forEach(turno=>{
       const bats=batsByTurno[turno.ID_Turno]||[];
       if(!turno.OraInizio||!bats.length)return;
+      if(turno.DataInizio===data)haTurno=true; // conta come "ha turno" solo se inizia proprio in questa data
       let cur=toMin(turno.OraInizio);
       bats.forEach(bat=>{
         const s=cur, e=cur+(bat.OreBattezzate||0)*60;
         cur=e;
+        // Applica i filtri reparto/attività: se il battesimo non corrisponde, lo slot resta vuoto
+        if(freps.length && !freps.includes(String(bat.ID_Reparto)))return;
+        if(fatts.length && !fatts.includes(String(bat.ID_Attivita)))return;
         // Calcola l'offset in minuti assoluti dall'inizio del giorno SELEZIONATO (data)
-        // Se il turno inizia il giorno precedente, sottrae 1440 min per riportare tutto
-        // sulla stessa scala 0-1440 del giorno selezionato.
         const offsetGiorni=turno.DataInizio===data?0:(turno.DataInizio===dataPrec?-1440:null);
         if(offsetGiorni===null)return;
         const segS=s+offsetGiorni, segE=e+offsetGiorni;
-        // Interseca con [0,1440) del giorno selezionato
         const visS=Math.max(0,segS), visE=Math.min(1440,segE);
         if(visS>=visE)return;
         const slotStart=Math.floor(visS/15), slotEnd=Math.ceil(visE/15);
@@ -2604,20 +2627,41 @@ async function caricaTabelloneGiornaliero(){
         }
       });
     });
-    return{dip,slots};
+    return{dip,slots,haTurno};
   });
 
-  // Costruisce le intestazioni orarie (ogni 4 slot = 1h, mostra solo l'ora intera per leggibilità)
+  _tgRigheCache={righe:righeTabellone,data};
+  renderTabelloneTabella();
+}
+
+function filtraRigheTabellone(){
+  if(_tgRigheCache.righe)renderTabelloneTabella();
+}
+
+function renderTabelloneTabella(){
+  const{righe:righeTabellone,data}=_tgRigheCache;
+  const cont=document.getElementById('tg-content');
+  if(!cont||!righeTabellone)return;
+
+  const soloConTurno=document.getElementById('tg-solo-turno')?.checked;
+  const cerca=(document.getElementById('tg-cerca')?.value||'').trim().toLowerCase();
+
+  let righeFiltrate=righeTabellone;
+  if(soloConTurno)righeFiltrate=righeFiltrate.filter(r=>r.haTurno);
+  if(cerca)righeFiltrate=righeFiltrate.filter(r=>r.dip.Nome.toLowerCase().includes(cerca));
+
+  const SLOTS=96;
+
+  // Intestazioni orarie compatte: mostra l'ora solo ogni 4 slot (ogni ora), colonne sottili
   const headerCelle=[];
   for(let s=0;s<SLOTS;s++){
     const minTot=s*15;
     const h=Math.floor(minTot/60);
     const isOraIntera=minTot%60===0;
-    headerCelle.push(`<th class="tg-th${isOraIntera?' tg-th-ora':''}" style="min-width:18px;">${isOraIntera?String(h).padStart(2,'0'):''}</th>`);
+    headerCelle.push(`<th class="tg-th${isOraIntera?' tg-th-ora':''}">${isOraIntera?h:''}</th>`);
   }
 
-  // Costruisce le righe: ogni dipendente, con celle unite (colspan) per blocchi continui dello stesso reparto/attività
-  const righeHtml=righeTabellone.map(({dip,slots})=>{
+  const righeHtml=righeFiltrate.map(({dip,slots})=>{
     let celle='';
     let i=0;
     while(i<SLOTS){
@@ -2628,7 +2672,7 @@ async function caricaTabelloneGiornaliero(){
       if(cur){
         const colore=_coloreReparto(cur.ID_Reparto);
         celle+=`<td colspan="${span}" class="tg-cell" style="background:${colore};" title="${cur.nomeRep} — ${cur.nomeAtt}">
-          ${span>=3?`<span class="tg-label">${cur.nomeAtt}</span>`:''}
+          ${span>=5?`<span class="tg-label">${cur.nomeAtt}</span>`:''}
         </td>`;
       }else{
         celle+=`<td colspan="${span}" class="tg-cell-empty"></td>`;
@@ -2638,7 +2682,7 @@ async function caricaTabelloneGiornaliero(){
     return `<tr><td class="tg-dipname">${dip.Nome}</td>${celle}</tr>`;
   }).join('');
 
-  // Legenda colori reparto (solo i reparti effettivamente usati nella giornata)
+  // Legenda colori reparto (solo i reparti effettivamente usati nella giornata, su tutte le righe non filtrate)
   const repartiUsati=new Set();
   righeTabellone.forEach(({slots})=>slots.forEach(s=>{if(s)repartiUsati.add(s.ID_Reparto);}));
   const legenda=[..._reparti].filter(r=>repartiUsati.has(r.ID_Reparto)).map(r=>
@@ -2652,11 +2696,11 @@ async function caricaTabelloneGiornaliero(){
     <div>${legenda||'<span style="color:var(--grigio);font-size:0.8rem;">Nessun turno in questa giornata</span>'}</div>
   </div>
   <div class="card">
-    <div class="ct">${fmtDataIT(data)} — ${dipMagazzino.length} dipendenti</div>
+    <div class="ct">${fmtDataIT(data)} — ${righeFiltrate.length} dipendenti${righeFiltrate.length!==righeTabellone.length?` (su ${righeTabellone.length} totali)`:''}</div>
     <div class="tw" style="overflow-x:auto;">
       <table class="tg-table">
         <thead><tr><th class="tg-dipname-header">Dipendente</th>${headerCelle.join('')}</tr></thead>
-        <tbody>${righeHtml}</tbody>
+        <tbody>${righeHtml||'<tr><td class="tg-dipname" colspan="97" style="text-align:center;padding:14px;color:var(--grigio);">Nessun dipendente corrisponde ai filtri</td></tr>'}</tbody>
       </table>
     </div>
   </div>`;
@@ -2903,9 +2947,9 @@ async function renderConfig(){
     </p>
     <button class="btn br bsm" onclick="controllaAnomalieTurni()">Avvia controllo</button>
     <div id="anomalie-result" style="margin-top:14px;"></div>
-  </div>
+  </div>`:''}
 
-  <!-- BACKUP COMPLETO -->
+  <!-- BACKUP COMPLETO (visibile sia ad admin che responsabile) -->
   <div class="card" style="border-color:var(--blu);">
     <div class="ct" style="color:var(--blu);">💾 Backup completo del database</div>
     <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">
@@ -2913,7 +2957,7 @@ async function renderConfig(){
     </p>
     <button class="btn bp bsm" onclick="scaricaBackupCompleto()">⬇ Scarica backup completo</button>
     <div id="backup-msg" style="margin-top:10px;"></div>
-  </div>`:''}`;
+  </div>`;
 
   // Carica tutte le tariffe (solo admin: il responsabile non ha le tabelle nel DOM)
   if(isAdmin)await caricaTariffe();
