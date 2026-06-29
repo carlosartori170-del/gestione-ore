@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v70</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v71</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -843,6 +843,50 @@ function aggBar(){
   if(bar){bar.style.width=pct+'%';bar.style.background=rim===0?'#15803d':rim<0?'#b83228':'#c97010';}
 }
 
+// ============================================================
+// CONTROLLO SOVRAPPOSIZIONI TURNI
+// Verifica se un nuovo turno (dipendente+data+orario) si sovrappone con un turno
+// già esistente dello stesso dipendente, considerando anche i turni notturni
+// che attraversano la mezzanotte.
+// ============================================================
+async function trovaTurniSovrapposti(ID_Dipendente, DataInizio, OraInizio, OraFine, escludiIdTurno){
+  // Calcola l'intervallo assoluto (minuti dall'epoca) del nuovo turno
+  function toAbsMin(dataStr, oraStr){
+    const d=new Date(dataStr+'T00:00:00');
+    const[h,m]=(oraStr||'00:00').split(':').map(Number);
+    return Math.floor(d.getTime()/60000)+h*60+m;
+  }
+  const nuovoStart=toAbsMin(DataInizio,OraInizio);
+  let nuovoEnd=toAbsMin(DataInizio,OraFine);
+  if(nuovoEnd<=nuovoStart)nuovoEnd+=24*60; // turno notturno: finisce il giorno dopo
+
+  // Carica i turni dello stesso dipendente in una finestra di ±2 giorni (sufficiente per coprire
+  // qualsiasi sovrapposizione anche con turni notturni adiacenti)
+  function addDays(dateStr,days){
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+days);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  const dalCheck=addDays(DataInizio,-2), alCheck=addDays(DataInizio,2);
+  let q=sb.from('TurniGiornalieri').select('*').eq('ID_Dipendente',ID_Dipendente).eq('ID_Magazzino',MAGAZZINO_ATTIVO)
+    .gte('DataInizio',dalCheck).lte('DataInizio',alCheck);
+  if(escludiIdTurno)q=q.neq('ID_Turno',escludiIdTurno);
+  const{data:candidati}=await q;
+
+  const conflitti=[];
+  (candidati||[]).forEach(t=>{
+    if(!t.OraInizio||!t.OraFine)return; // turni senza orario non vengono controllati
+    const s=toAbsMin(t.DataInizio,t.OraInizio);
+    let e=toAbsMin(t.DataInizio,t.OraFine);
+    if(e<=s)e+=24*60;
+    // sovrapposizione se gli intervalli si intersecano
+    if(nuovoStart<e && s<nuovoEnd){
+      conflitti.push(t);
+    }
+  });
+  return conflitti;
+}
+
 async function salvaTurno(){
   const ID_Dipendente=document.getElementById('i-dip').value;
   const DataInizio=document.getElementById('i-data').value;
@@ -859,7 +903,23 @@ async function salvaTurno(){
     if(!r.ID_Reparto||!r.ID_Attivita||!r.OreBattezzate){msg.innerHTML=`<div class="alert aerr">Riga ${i+1}: completa tutti i campi.</div>`;return;}
   }
   if(Math.abs(tot-batt)>0.01){msg.innerHTML=`<div class="alert aerr">Ore battezzate (${batt}h) ≠ ore totali (${tot}h). Differenza: ${Math.round((tot-batt)*100)/100}h</div>`;return;}
+
+  // Validazione: orario non valido (turno da 0 ore)
+  if(OraInizio===OraFine){msg.innerHTML=`<div class="alert aerr">Orario non valido: OraInizio e OraFine non possono coincidere.</div>`;return;}
+
   const{data:old}=await sb.from('TurniGiornalieri').select('ID_Turno').eq('ID_Dipendente',ID_Dipendente).eq('DataInizio',DataInizio).eq('ID_Magazzino',MAGAZZINO_ATTIVO).maybeSingle();
+
+  // CONTROLLO SOVRAPPOSIZIONI: blocca se il dipendente ha già un altro turno che si accavalla
+  // nello stesso intervallo orario (anche a cavallo di mezzanotte). Se stiamo modificando un
+  // turno esistente (old presente con stesso ID), lo escludiamo dal controllo su sé stesso.
+  const idDaEscludere=old?old.ID_Turno:null;
+  const conflitti=await trovaTurniSovrapposti(ID_Dipendente,DataInizio,OraInizio,OraFine,idDaEscludere);
+  if(conflitti.length){
+    const elenco=conflitti.map(c=>`Turno #${c.ID_Turno}: ${fmtDataIT(c.DataInizio)} ${c.OraInizio||'—'}-${c.OraFine||'—'}`).join('<br>');
+    msg.innerHTML=`<div class="alert aerr">⚠ Sovrapposizione rilevata: questo dipendente ha già un turno che si accavalla con l'orario inserito:<br>${elenco}<br><br>Correggi l'orario o elimina/modifica il turno in conflitto prima di salvare.</div>`;
+    return;
+  }
+
   if(old){
     await sb.from('BattesimiTurno').delete().eq('ID_Turno',old.ID_Turno);
     await sb.from('TurniGiornalieri').delete().eq('ID_Turno',old.ID_Turno);
@@ -2665,10 +2725,87 @@ async function renderConfig(){
       <thead><tr><th>Reparto</th><th>Costo/giorno</th><th>Dal</th><th>Al</th><th></th></tr></thead>
       <tbody id="tbody-mezzi"><tr><td colspan="5" class="loading">Caricamento...</td></tr></tbody>
     </table></div>
+  </div>
+
+  <!-- CONTROLLO ANOMALIE -->
+  <div class="card" style="border-color:var(--rosso);">
+    <div class="ct" style="color:var(--rosso);">🔍 Controllo anomalie turni</div>
+    <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">
+      Cerca turni dello stesso dipendente che si sovrappongono nello stesso intervallo orario (anche a cavallo di mezzanotte), nel magazzino attivo.
+    </p>
+    <button class="btn br bsm" onclick="controllaAnomalieTurni()">Avvia controllo</button>
+    <div id="anomalie-result" style="margin-top:14px;"></div>
   </div>`:''}`;
 
   // Carica tutte le tariffe (solo admin: il responsabile non ha le tabelle nel DOM)
   if(isAdmin)await caricaTariffe();
+}
+
+async function controllaAnomalieTurni(){
+  const cont=document.getElementById('anomalie-result');
+  cont.innerHTML='<div class="loading">⏳ Controllo in corso...</div>';
+
+  // Carica tutti i turni del magazzino attivo (paginato)
+  let ggs=[];
+  {
+    let lastId=0;
+    while(true){
+      const{data:batch,error}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente,DataInizio,OraInizio,OraFine')
+        .eq('ID_Magazzino',MAGAZZINO_ATTIVO).gt('ID_Turno',lastId).order('ID_Turno',{ascending:true}).limit(1000);
+      if(error||!batch||!batch.length)break;
+      ggs=[...ggs,...batch];
+      if(batch.length<1000)break;
+      lastId=batch[batch.length-1].ID_Turno;
+    }
+  }
+
+  // Raggruppa per dipendente
+  const perDip={};
+  ggs.forEach(t=>{if(!t.OraInizio||!t.OraFine)return;if(!perDip[t.ID_Dipendente])perDip[t.ID_Dipendente]=[];perDip[t.ID_Dipendente].push(t);});
+
+  function toAbsMin(dataStr,oraStr){
+    const d=new Date(dataStr+'T00:00:00');
+    const[h,m]=(oraStr||'00:00').split(':').map(Number);
+    return Math.floor(d.getTime()/60000)+h*60+m;
+  }
+
+  const conflitti=[];
+  Object.entries(perDip).forEach(([idDip,turni])=>{
+    turni.sort((a,b)=>a.DataInizio.localeCompare(b.DataInizio));
+    for(let i=0;i<turni.length;i++){
+      const s1=toAbsMin(turni[i].DataInizio,turni[i].OraInizio);
+      let e1=toAbsMin(turni[i].DataInizio,turni[i].OraFine);
+      if(e1<=s1)e1+=24*60;
+      for(let j=i+1;j<turni.length;j++){
+        // Solo turni vicini nel tempo (entro 2 giorni) per evitare confronti inutili su tutto l'anno
+        if(Math.abs(new Date(turni[j].DataInizio)-new Date(turni[i].DataInizio))>2*86400000)break;
+        const s2=toAbsMin(turni[j].DataInizio,turni[j].OraInizio);
+        let e2=toAbsMin(turni[j].DataInizio,turni[j].OraFine);
+        if(e2<=s2)e2+=24*60;
+        if(s1<e2 && s2<e1){
+          conflitti.push({idDip,t1:turni[i],t2:turni[j]});
+        }
+      }
+    }
+  });
+
+  if(!conflitti.length){
+    cont.innerHTML='<div class="alert aok">✔ Nessuna sovrapposizione rilevata. Tutto pulito.</div>';
+    return;
+  }
+
+  const righe=conflitti.map(c=>`<tr>
+    <td>${nomeDip(c.idDip)}</td>
+    <td>#${c.t1.ID_Turno} — ${fmtDataIT(c.t1.DataInizio)} ${c.t1.OraInizio}-${c.t1.OraFine}</td>
+    <td>#${c.t2.ID_Turno} — ${fmtDataIT(c.t2.DataInizio)} ${c.t2.OraInizio}-${c.t2.OraFine}</td>
+  </tr>`).join('');
+
+  cont.innerHTML=`
+  <div class="alert aerr" style="margin-bottom:10px;">⚠ Trovate ${conflitti.length} sovrapposizioni</div>
+  <div class="tw"><table>
+    <thead><tr><th>Dipendente</th><th>Turno A</th><th>Turno B</th></tr></thead>
+    <tbody>${righe}</tbody>
+  </table></div>`;
 }
 
 async function caricaTariffe(){
