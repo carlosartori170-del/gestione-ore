@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v68</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v69</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -1951,11 +1951,23 @@ async function filtraArch(){
   const fatts=getCkValues('f-att-ck'); // array di ID_Attivita selezionati (vuoto = tutte)
   aggCkLabel('f-rep-trigger','f-rep-ck','Tutti');
   aggCkLabel('f-att-trigger','f-att-ck','Tutte');
-  let qgg=sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO);
-  if(fd)qgg=qgg.eq('ID_Dipendente',fd);
-  if(dal)qgg=qgg.gte('DataInizio',dal);
-  if(al)qgg=qgg.lte('DataInizio',al);
-  const{data:ggs}=await qgg;
+  let ggs=[];
+  {
+    let lastId=0;
+    while(true){
+      let qgg=sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO)
+        .gt('ID_Turno',lastId).order('ID_Turno',{ascending:true}).limit(1000);
+      if(fd)qgg=qgg.eq('ID_Dipendente',fd);
+      if(dal)qgg=qgg.gte('DataInizio',dal);
+      if(al)qgg=qgg.lte('DataInizio',al);
+      const{data:batch,error}=await qgg;
+      if(error){console.error('Errore paginazione turni archivio:',error);break;}
+      if(!batch||!batch.length)break;
+      ggs=[...ggs,...batch];
+      if(batch.length<1000)break;
+      lastId=batch[batch.length-1].ID_Turno;
+    }
+  }
   const ids=(ggs||[]).map(g=>g.ID_Turno);
   const riep=document.getElementById('arch-riepilogo');
   if(!ids.length){
