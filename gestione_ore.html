@@ -80,11 +80,11 @@ nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
 .ckitem input{margin:0;cursor:pointer;}
 
 /* Tabellone Giornaliero */
-.tg-table{border-collapse:collapse;font-size:0.66rem;}
-.tg-table th,.tg-table td{border:1px solid var(--bordo);padding:0;}
-.tg-dipname-header{position:sticky;left:0;background:var(--sfondo);z-index:5;min-width:130px;padding:6px 8px!important;text-align:left;font-weight:800;}
-.tg-dipname{position:sticky;left:0;background:var(--bianco);z-index:4;min-width:130px;padding:4px 8px;font-size:0.72rem;font-weight:600;white-space:nowrap;border-right:2px solid var(--bordo);overflow:hidden;text-overflow:ellipsis;}
-.tg-th{font-size:0.52rem;color:var(--grigio);text-align:center;font-weight:500;padding:1px 0;width:8px;min-width:8px;}
+.tg-table{border-collapse:collapse;font-size:0.66rem;table-layout:fixed;}
+.tg-table th,.tg-table td{border:1px solid var(--bordo);padding:0;overflow:hidden;}
+.tg-dipname-header{position:sticky;left:0;background:var(--sfondo);z-index:5;width:130px;padding:6px 8px!important;text-align:left;font-weight:800;}
+.tg-dipname{position:sticky;left:0;background:var(--bianco);z-index:4;width:130px;padding:4px 8px;font-size:0.72rem;font-weight:600;white-space:nowrap;border-right:2px solid var(--bordo);overflow:hidden;text-overflow:ellipsis;}
+.tg-th{font-size:0.52rem;color:var(--grigio);text-align:center;font-weight:500;padding:1px 0;width:16px;}
 .tg-th-ora{font-weight:800;color:var(--testo);border-left:1.5px solid var(--p);}
 .tg-cell{height:20px;color:white;font-size:0.58rem;text-align:center;overflow:hidden;white-space:nowrap;cursor:default;}
 .tg-cell-empty{height:20px;background:repeating-linear-gradient(45deg,#f8f8f8,#f8f8f8 4px,#f0f0f0 4px,#f0f0f0 8px);}
@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v76</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v77</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
