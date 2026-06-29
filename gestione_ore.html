@@ -215,7 +215,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v72</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v73</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -2755,21 +2755,20 @@ async function scaricaBackupCompleto(){
   const msg=document.getElementById('backup-msg');
   msg.innerHTML='<div class="loading">⏳ Esportazione in corso, può richiedere qualche secondo...</div>';
 
-  // Elenco di tutte le tabelle da esportare. Le tabelle con molte righe (Turni/Battesimi/Produzione)
-  // vengono lette a blocchi da 1000 per evitare limiti di Supabase.
-  async function fetchAll(tableName, orderCol){
+  // Elenco di tutte le tabelle da esportare. Pagina con .range() (offset-based) — funziona
+  // su qualsiasi tabella indipendentemente dal nome della chiave primaria, ed evita il
+  // troncamento silenzioso che si verificava con tabelle prive di colonna di ordinamento esplicita.
+  async function fetchAll(tableName){
     let all=[];
-    let lastId=0;
+    let offset=0;
+    const pageSize=1000;
     while(true){
-      let q=sb.from(tableName).select('*');
-      if(orderCol)q=q.gt(orderCol,lastId).order(orderCol,{ascending:true});
-      q=q.limit(1000);
-      const{data,error}=await q;
+      const{data,error}=await sb.from(tableName).select('*').range(offset,offset+pageSize-1);
       if(error){console.error(`Errore backup tabella ${tableName}:`,error);break;}
       if(!data||!data.length)break;
       all=[...all,...data];
-      if(data.length<1000||!orderCol)break;
-      lastId=data[data.length-1][orderCol];
+      if(data.length<pageSize)break;
+      offset+=pageSize;
     }
     return all;
   }
@@ -2777,21 +2776,21 @@ async function scaricaBackupCompleto(){
   try{
     const backup={
       data_backup:new Date().toISOString(),
-      versione_app:'v71',
+      versione_app:'v73',
       Magazzini:await fetchAll('Magazzini'),
-      Dipendenti:await fetchAll('Dipendenti','ID_Dipendente'),
-      Reparti:await fetchAll('Reparti','ID_Reparto'),
-      Attivita:await fetchAll('Attivita','ID_Attivita'),
+      Dipendenti:await fetchAll('Dipendenti'),
+      Reparti:await fetchAll('Reparti'),
+      Attivita:await fetchAll('Attivita'),
       Contratti:await fetchAll('Contratti'),
       Livelli:await fetchAll('Livelli'),
-      TipiProduzione:await fetchAll('TipiProduzione','ID_TipoProduzione'),
-      TurniGiornalieri:await fetchAll('TurniGiornalieri','ID_Turno'),
-      BattesimiTurno:await fetchAll('BattesimiTurno','ID_Battesimo'),
+      TipiProduzione:await fetchAll('TipiProduzione'),
+      TurniGiornalieri:await fetchAll('TurniGiornalieri'),
+      BattesimiTurno:await fetchAll('BattesimiTurno'),
       BattesimiPreTurno:await fetchAll('BattesimiPreTurno'),
-      ProduzioneReparti:await fetchAll('ProduzioneReparti','ID_Produzione'),
+      ProduzioneReparti:await fetchAll('ProduzioneReparti'),
       ProduzioneOperatori:await fetchAll('ProduzioneOperatori'),
       TariffeEconomia:await fetchAll('TariffeEconomia'),
-      TariffeProduzione:await fetchAll('TariffeProduzione','ID_Tariffa'),
+      TariffeProduzione:await fetchAll('TariffeProduzione'),
       CostiMezziReparti:await fetchAll('CostiMezziReparti'),
       Utenti:await fetchAll('Utenti')
     };
