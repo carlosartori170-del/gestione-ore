@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v75</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v76</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -2525,8 +2525,8 @@ async function renderTabelloneGiornaliero(){
   const mc=document.getElementById('mc');
   mc.innerHTML=`
   <div class="card">
-    <div class="ct">${ICO.ttabellone} Tabellone giornaliero</div>
-    <div class="g4">
+    <div class="ct">${ICO.ttabellone} Tabellone giornaliero <span style="font-weight:400;font-size:0.74rem;color:var(--grigio);">(03:00 — 07:00 del giorno dopo)</span></div>
+    <div class="g3">
       <div class="fg"><label>Data</label><input id="tg-data" type="date" value="${oggi()}"></div>
       <div class="fg ckwrap">
         <label>Reparto</label>
@@ -2538,7 +2538,6 @@ async function renderTabelloneGiornaliero(){
         <button type="button" class="cktrigger" id="tg-att-trigger" onclick="toggleCkDropdown('tg-att-ck')">Tutte</button>
         <div class="ckdropdown" id="tg-att-ck">${ckAttivita('tg-att-ck')}</div>
       </div>
-      <div class="fg"><label>Cerca dipendente</label><input id="tg-cerca" type="text" placeholder="Nome..." oninput="filtraRigheTabellone()"></div>
     </div>
     <div class="brow" style="align-items:center;">
       <button class="btn bp bsm" onclick="caricaTabelloneGiornaliero()">🔍 Visualizza</button>
@@ -2552,6 +2551,10 @@ async function renderTabelloneGiornaliero(){
 
 let _tgRigheCache=[]; // cache delle righe calcolate, per poter rifiltrare senza ricaricare dal DB
 
+// Finestra di visualizzazione: 03:00 del giorno selezionato -> 07:00 del giorno successivo (28 ore = 112 slot da 15min)
+const TG_ORIGINE_MIN=3*60; // 03:00 espresso in minuti dall'inizio del giorno selezionato
+const TG_SLOTS=112; // 28h * 4 slot/ora
+
 async function caricaTabelloneGiornaliero(){
   const data=document.getElementById('tg-data')?.value;
   const cont=document.getElementById('tg-content');
@@ -2563,22 +2566,22 @@ async function caricaTabelloneGiornaliero(){
   aggCkLabel('tg-rep-trigger','tg-rep-ck','Tutti');
   aggCkLabel('tg-att-trigger','tg-att-ck','Tutte');
 
-  // Estende il caricamento di 1 giorno prima per catturare turni notturni che iniziano il giorno
-  // precedente e proseguono nella data selezionata
   function addDays(dateStr,days){
     const d=new Date(dateStr+'T00:00:00');
     d.setDate(d.getDate()+days);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
   const dataPrec=addDays(data,-1);
+  const dataSucc=addDays(data,1);
 
   // Dipendenti attivi del magazzino attivo
   const dipMagazzino=_dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).includes(MAGAZZINO_ATTIVO)).sort((a,b)=>a.Nome.localeCompare(b.Nome));
   if(!dipMagazzino.length){cont.innerHTML='<div class="empty">Nessun dipendente attivo in questo magazzino.</div>';return;}
 
-  // Carica turni del giorno selezionato + giorno precedente (per i notturni a cavallo)
+  // Carica turni che possono toccare la finestra 03:00(data)->07:00(data+1): turni con DataInizio
+  // tra dataPrec e dataSucc (margine ampio per sicurezza sui notturni)
   const{data:ggs}=await sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO)
-    .gte('DataInizio',dataPrec).lte('DataInizio',data);
+    .gte('DataInizio',dataPrec).lte('DataInizio',dataSucc);
 
   const idTurni=(ggs||[]).map(g=>g.ID_Turno);
   let bats=[];
@@ -2594,35 +2597,37 @@ async function caricaTabelloneGiornaliero(){
   bats.forEach(b=>{if(!batsByTurno[b.ID_Turno])batsByTurno[b.ID_Turno]=[];batsByTurno[b.ID_Turno].push(b);});
   Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
 
-  // Per ogni dipendente, costruisce un array di 96 slot da 15 minuti (00:00-24:00 del giorno selezionato)
-  // con {ID_Reparto, NomeAttivita} se occupato in quello slot, null se libero.
-  const SLOTS=96; // 24h * 4 (slot da 15 min)
   function toMin(hhmm){if(!hhmm)return 0;const[h,m]=(hhmm||'00:00').split(':').map(Number);return h*60+m;}
 
   const righeTabellone=dipMagazzino.map(dip=>{
-    const slots=new Array(SLOTS).fill(null);
+    const slots=new Array(TG_SLOTS).fill(null);
     let haTurno=false;
-    // Trova tutti i turni di questo dipendente tra dataPrec e data
     const turniDip=(ggs||[]).filter(g=>g.ID_Dipendente===dip.ID_Dipendente);
     turniDip.forEach(turno=>{
       const bats=batsByTurno[turno.ID_Turno]||[];
       if(!turno.OraInizio||!bats.length)return;
       if(turno.DataInizio===data)haTurno=true; // conta come "ha turno" solo se inizia proprio in questa data
       let cur=toMin(turno.OraInizio);
+      // offsetGiorni: quanti giorni (in minuti) separano l'inizio del turno dalla data selezionata
+      let offsetGiorni;
+      if(turno.DataInizio===data)offsetGiorni=0;
+      else if(turno.DataInizio===dataPrec)offsetGiorni=-1440;
+      else if(turno.DataInizio===dataSucc)offsetGiorni=1440;
+      else{return;}
       bats.forEach(bat=>{
         const s=cur, e=cur+(bat.OreBattezzate||0)*60;
         cur=e;
-        // Applica i filtri reparto/attività: se il battesimo non corrisponde, lo slot resta vuoto
         if(freps.length && !freps.includes(String(bat.ID_Reparto)))return;
         if(fatts.length && !fatts.includes(String(bat.ID_Attivita)))return;
-        // Calcola l'offset in minuti assoluti dall'inizio del giorno SELEZIONATO (data)
-        const offsetGiorni=turno.DataInizio===data?0:(turno.DataInizio===dataPrec?-1440:null);
-        if(offsetGiorni===null)return;
+        // Posizione assoluta in minuti rispetto alla data selezionata (mezzanotte=0)
         const segS=s+offsetGiorni, segE=e+offsetGiorni;
-        const visS=Math.max(0,segS), visE=Math.min(1440,segE);
+        // Sposta sull'origine della finestra: 03:00 del giorno selezionato = minuto TG_ORIGINE_MIN
+        // La finestra visibile è [TG_ORIGINE_MIN, TG_ORIGINE_MIN+28*60) sulla scala assoluta
+        const finestraS=TG_ORIGINE_MIN, finestraE=TG_ORIGINE_MIN+28*60;
+        const visS=Math.max(finestraS,segS), visE=Math.min(finestraE,segE);
         if(visS>=visE)return;
-        const slotStart=Math.floor(visS/15), slotEnd=Math.ceil(visE/15);
-        for(let s2=slotStart;s2<slotEnd && s2<SLOTS;s2++){
+        const slotStart=Math.floor((visS-finestraS)/15), slotEnd=Math.ceil((visE-finestraS)/15);
+        for(let s2=slotStart;s2<slotEnd && s2<TG_SLOTS;s2++){
           if(s2>=0)slots[s2]={ID_Reparto:bat.ID_Reparto,nomeAtt:nomeAtt(bat.ID_Attivita),nomeRep:nomeRep(bat.ID_Reparto)};
         }
       });
@@ -2630,7 +2635,7 @@ async function caricaTabelloneGiornaliero(){
     return{dip,slots,haTurno};
   });
 
-  _tgRigheCache={righe:righeTabellone,data};
+  _tgRigheCache={righe:righeTabellone,data,freps,fatts};
   renderTabelloneTabella();
 }
 
@@ -2639,24 +2644,26 @@ function filtraRigheTabellone(){
 }
 
 function renderTabelloneTabella(){
-  const{righe:righeTabellone,data}=_tgRigheCache;
+  const{righe:righeTabellone,data,freps,fatts}=_tgRigheCache;
   const cont=document.getElementById('tg-content');
   if(!cont||!righeTabellone)return;
 
   const soloConTurno=document.getElementById('tg-solo-turno')?.checked;
-  const cerca=(document.getElementById('tg-cerca')?.value||'').trim().toLowerCase();
+  const haFiltroAttivo=(freps&&freps.length)||(fatts&&fatts.length);
 
   let righeFiltrate=righeTabellone;
   if(soloConTurno)righeFiltrate=righeFiltrate.filter(r=>r.haTurno);
-  if(cerca)righeFiltrate=righeFiltrate.filter(r=>r.dip.Nome.toLowerCase().includes(cerca));
+  // Se è attivo un filtro reparto/attività, mostra solo i dipendenti che hanno almeno
+  // uno slot occupato corrispondente al filtro (gli altri vengono nascosti del tutto, non solo svuotati)
+  if(haFiltroAttivo)righeFiltrate=righeFiltrate.filter(r=>r.slots.some(s=>s!==null));
 
-  const SLOTS=96;
+  const SLOTS=TG_SLOTS;
 
-  // Intestazioni orarie compatte: mostra l'ora solo ogni 4 slot (ogni ora), colonne sottili
+  // Intestazioni orarie: la prima colonna corrisponde alle 03:00, ogni 4 slot un'ora intera
   const headerCelle=[];
   for(let s=0;s<SLOTS;s++){
-    const minTot=s*15;
-    const h=Math.floor(minTot/60);
+    const minTot=TG_ORIGINE_MIN+s*15;
+    const h=Math.floor(minTot/60)%24;
     const isOraIntera=minTot%60===0;
     headerCelle.push(`<th class="tg-th${isOraIntera?' tg-th-ora':''}">${isOraIntera?h:''}</th>`);
   }
@@ -2700,7 +2707,7 @@ function renderTabelloneTabella(){
     <div class="tw" style="overflow-x:auto;">
       <table class="tg-table">
         <thead><tr><th class="tg-dipname-header">Dipendente</th>${headerCelle.join('')}</tr></thead>
-        <tbody>${righeHtml||'<tr><td class="tg-dipname" colspan="97" style="text-align:center;padding:14px;color:var(--grigio);">Nessun dipendente corrisponde ai filtri</td></tr>'}</tbody>
+        <tbody>${righeHtml||'<tr><td class="tg-dipname" colspan="113" style="text-align:center;padding:14px;color:var(--grigio);">Nessun dipendente corrisponde ai filtri</td></tr>'}</tbody>
       </table>
     </div>
   </div>`;
