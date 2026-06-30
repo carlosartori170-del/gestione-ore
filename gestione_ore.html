@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v89</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v90</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -567,10 +567,14 @@ function optDips(sel=''){return _dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).inc
 // mentre si digita (ricerca "contiene", case/accent-insensitive). La selezione effettiva
 // resta nell'input nascosto #i-dip, esattamente come prima con la <select>, così tutto
 // il resto del codice (salvaTurno, modificaTurno, ecc.) continua a funzionare invariato.
+// Supporta navigazione con frecce ↑/↓ ed Invio per confermare.
 // ============================================================
 function _normalizzaTesto(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 }
+let _dipDropdownItems=[]; // elenco corrente mostrato nella tendina, per la navigazione da tastiera
+let _dipDropdownIdx=-1;   // indice della voce attualmente evidenziata
+
 function filtraDipendenti(testo){
   const dd=document.getElementById('i-dip-dropdown');
   if(!dd)return;
@@ -578,14 +582,61 @@ function filtraDipendenti(testo){
   const lista=_dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).includes(MAGAZZINO_ATTIVO));
   const filtrati=q?lista.filter(d=>_normalizzaTesto(d.Nome).includes(q)||String(d.ID_Dipendente).includes(q)):lista;
   filtrati.sort((a,b)=>a.Nome.localeCompare(b.Nome));
-  if(!filtrati.length){
-    dd.innerHTML='<div style="padding:8px;font-size:0.8rem;color:var(--grigio);">Nessun dipendente trovato</div>';
-  } else {
-    dd.innerHTML=filtrati.slice(0,50).map(d=>
-      `<div class="ckitem" onmousedown="selezionaDipendente(${d.ID_Dipendente},'${d.Nome.replace(/'/g,"\\'")}')">[${d.ID_Dipendente}] ${d.Nome}</div>`
-    ).join('');
-  }
+  _dipDropdownItems=filtrati.slice(0,50);
+  _dipDropdownIdx=-1;
+  _renderDipDropdown();
   dd.classList.add('open');
+}
+// Riapre la tendina mostrando SEMPRE l'elenco completo (non filtrato dal testo attuale del
+// campo, che dopo una selezione contiene "[ID] Nome" e farebbe trovare solo quella persona).
+function mostraElencoCompletoDip(){
+  filtraDipendenti('');
+}
+function _renderDipDropdown(){
+  const dd=document.getElementById('i-dip-dropdown');
+  if(!dd)return;
+  if(!_dipDropdownItems.length){
+    dd.innerHTML='<div style="padding:8px;font-size:0.8rem;color:var(--grigio);">Nessun dipendente trovato</div>';
+    return;
+  }
+  dd.innerHTML=_dipDropdownItems.map((d,i)=>
+    `<div class="ckitem" data-idx="${i}" onmousedown="selezionaDipendente(${d.ID_Dipendente},'${d.Nome.replace(/'/g,"\\'")}')" onmouseenter="_dipDropdownIdx=${i};_evidenziaDipDropdown()" style="${i===_dipDropdownIdx?'background:var(--sfondo);':''}">[${d.ID_Dipendente}] ${d.Nome}</div>`
+  ).join('');
+}
+function _evidenziaDipDropdown(){
+  const dd=document.getElementById('i-dip-dropdown');
+  if(!dd)return;
+  dd.querySelectorAll('.ckitem').forEach((el,i)=>{
+    el.style.background=i===_dipDropdownIdx?'var(--sfondo)':'';
+  });
+  const attivo=dd.querySelector(`.ckitem[data-idx="${_dipDropdownIdx}"]`);
+  if(attivo)attivo.scrollIntoView({block:'nearest'});
+}
+function navigaDipDropdown(e){
+  const dd=document.getElementById('i-dip-dropdown');
+  if(!dd)return;
+  if(!dd.classList.contains('open')&&(e.key==='ArrowDown'||e.key==='ArrowUp')){
+    // tendina chiusa: la apriamo con l'elenco completo e iniziamo dalla prima voce
+    mostraElencoCompletoDip();
+  }
+  if(!_dipDropdownItems.length)return;
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    _dipDropdownIdx=(_dipDropdownIdx+1)%_dipDropdownItems.length;
+    _evidenziaDipDropdown();
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    _dipDropdownIdx=(_dipDropdownIdx-1+_dipDropdownItems.length)%_dipDropdownItems.length;
+    _evidenziaDipDropdown();
+  } else if(e.key==='Enter'){
+    if(_dipDropdownIdx>=0&&_dipDropdownIdx<_dipDropdownItems.length){
+      e.preventDefault();
+      const d=_dipDropdownItems[_dipDropdownIdx];
+      selezionaDipendente(d.ID_Dipendente,d.Nome);
+    }
+  } else if(e.key==='Escape'){
+    chiudiDipDropdown();
+  }
 }
 function selezionaDipendente(id,nome){
   const search=document.getElementById('i-dip-search');
@@ -596,6 +647,7 @@ function selezionaDipendente(id,nome){
 }
 function chiudiDipDropdown(){
   document.getElementById('i-dip-dropdown')?.classList.remove('open');
+  _dipDropdownIdx=-1;
 }
 function toggleDipDropdown(){
   const dd=document.getElementById('i-dip-dropdown');
@@ -603,9 +655,10 @@ function toggleDipDropdown(){
   if(dd.classList.contains('open')){
     chiudiDipDropdown();
   } else {
-    const search=document.getElementById('i-dip-search');
-    filtraDipendenti(search?search.value:'');
-    search?.focus();
+    // Mostra sempre l'elenco completo quando si riapre con la freccina, indipendentemente
+    // da cosa contiene il campo (es. dopo una selezione precedente).
+    mostraElencoCompletoDip();
+    document.getElementById('i-dip-search')?.focus();
   }
 }
 function optReps(sel=''){return _reparti.map(r=>`<option value="${r.ID_Reparto}"${r.ID_Reparto==sel?' selected':''}>${r.NomeReparto}</option>`).join('');}
@@ -731,7 +784,7 @@ async function renderInserimento(){
       <div class="fg" style="position:relative;"><label>Dipendente</label>
         <div class="dip-search-wrap" style="position:relative;">
           <input type="text" id="i-dip-search" autocomplete="off" placeholder="Scrivi per cercare..." style="width:100%;padding-right:30px;box-sizing:border-box;"
-            oninput="filtraDipendenti(this.value)" onfocus="filtraDipendenti(this.value)">
+            oninput="filtraDipendenti(this.value)" onfocus="filtraDipendenti(this.value)" onkeydown="navigaDipDropdown(event)">
           <button type="button" tabindex="-1" onmousedown="event.preventDefault();toggleDipDropdown()"
             style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--grigio);font-size:0.7rem;padding:4px;">▾</button>
         </div>
@@ -3192,7 +3245,7 @@ async function scaricaBackupCompleto(){
   try{
     const backup={
       data_backup:new Date().toISOString(),
-      versione_app:'v89',
+      versione_app:'v90',
       Magazzini:await fetchAll('Magazzini'),
       Dipendenti:await fetchAll('Dipendenti'),
       Reparti:await fetchAll('Reparti'),
