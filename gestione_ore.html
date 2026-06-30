@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v80</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v86</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -3134,7 +3134,7 @@ async function scaricaBackupCompleto(){
   try{
     const backup={
       data_backup:new Date().toISOString(),
-      versione_app:'v80',
+      versione_app:'v86',
       Magazzini:await fetchAll('Magazzini'),
       Dipendenti:await fetchAll('Dipendenti'),
       Reparti:await fetchAll('Reparti'),
@@ -3508,8 +3508,27 @@ async function avviaImport(){
 
   const rawTurni=XLSX.utils.sheet_to_json(wb.Sheets[sheetTurni],{defval:null});
   const rawBats=XLSX.utils.sheet_to_json(wb.Sheets[sheetBats],{defval:null});
-  const rawProd=sheetProd?XLSX.utils.sheet_to_json(wb.Sheets[sheetProd],{defval:null}):[];
+
+  // Il foglio "TBL PRODUZIONE REPARTI" spesso ha l'header NON nella prima riga (possono esserci
+  // decine di righe vuote sopra), per cui sheet_to_json prenderebbe come intestazioni colonne
+  // fittizie (__EMPTY, __EMPTY_1...) e i veri nomi colonna finirebbero nei valori della prima riga
+  // dati. Rileviamo automaticamente la riga di intestazione vera cercando quella che contiene
+  // "ID_Produzione" tra i suoi valori, fino a 200 righe (copre ampi margini di righe vuote iniziali).
+  let rawProd=[];
+  if(sheetProd){
+    const wsProd=wb.Sheets[sheetProd];
+    const matrice=XLSX.utils.sheet_to_json(wsProd,{header:1,defval:null});
+    let headerRowIdx=0;
+    let trovato=false;
+    for(let i=0;i<Math.min(200,matrice.length);i++){
+      if((matrice[i]||[]).some(v=>String(v).trim()==='ID_Produzione')){headerRowIdx=i;trovato=true;break;}
+    }
+    if(!trovato)addLog('⚠ Intestazione "ID_Produzione" non trovata nelle prime 200 righe del foglio produzione — uso la riga 1 come fallback (potrebbe non funzionare).','var(--arancio)');
+    else if(headerRowIdx>0)addLog(`ℹ Intestazioni del foglio produzione trovate alla riga ${headerRowIdx+1} (non riga 1) — corretto automaticamente.`,'var(--blu)');
+    rawProd=XLSX.utils.sheet_to_json(wsProd,{defval:null,range:headerRowIdx});
+  }
   addLog(`📊 Letti: ${rawTurni.length} turni, ${rawBats.length} battesimi, ${rawProd.length} produzioni`);
+
 
   // Clean turni: exclude null ID_Dipendente or null DataInizio
   const turniPuliti=rawTurni.filter(r=>r.ID_Turno&&r.ID_Dipendente&&r.DataInizio).map(r=>{
@@ -3622,6 +3641,20 @@ async function avviaImport(){
       Notturno:!!r.Notturno
     };
   }).filter(r=>r.DataProduzione); // scarta righe dove la data non è stata interpretabile
+
+  // Diagnostica: se sono state escluse righe, mostra il motivo per le prime 3
+  if(rawProd.length && prodPuliti.length<rawProd.length){
+    const scartate=rawProd.filter(r=>!(r.ID_Produzione&&r.DataProduzione&&r.ID_Reparto&&r.ID_TipoProduzione&&parseDataFlessibile(r.DataProduzione)));
+    scartate.slice(0,3).forEach(r=>{
+      const motivi=[];
+      if(!r.ID_Produzione)motivi.push('ID_Produzione mancante/0');
+      if(!r.ID_Reparto)motivi.push('ID_Reparto mancante/0');
+      if(!r.ID_TipoProduzione)motivi.push('ID_TipoProduzione mancante/0');
+      if(!r.DataProduzione)motivi.push('DataProduzione mancante');
+      else if(!parseDataFlessibile(r.DataProduzione))motivi.push(`DataProduzione non interpretabile (valore: ${JSON.stringify(r.DataProduzione)}, tipo: ${typeof r.DataProduzione})`);
+      addLog(`⚠ Riga scartata (ID_Produzione=${r.ID_Produzione}): ${motivi.join(', ')}`,'var(--arancio)');
+    });
+  }
 
   const exclTurni=rawTurni.length-turniPuliti.length;
   const exclBats=rawBats.length-batsPuliti.length;
