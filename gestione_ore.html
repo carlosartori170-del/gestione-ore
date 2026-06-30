@@ -3560,15 +3560,59 @@ async function avviaImport(){
     Note:r.Note||''
   }));
 
-  // Clean produzione: exclude null ID_Produzione, DataProduzione, ID_Reparto o ID_TipoProduzione
-  const prodPuliti=rawProd.filter(r=>r.ID_Produzione&&r.DataProduzione&&r.ID_Reparto&&r.ID_TipoProduzione).map(r=>{
-    let d=r.DataProduzione;
+  // Helper: converte date in formato testo italiano "gg-mmm-aa" (es. "01-mag-26") in YYYY-MM-DD.
+  // Necessario perché alcuni export Access esportano la colonna DataProduzione come testo
+  // anziché come data Excel vera, e SheetJS la passa quindi come stringa non standard.
+  const MESI_IT={gen:1,feb:2,mar:3,apr:4,mag:5,giu:6,lug:7,ago:8,set:9,ott:10,nov:11,dic:12};
+  function parseDataFlessibile(d){
     if(d instanceof Date){
       const yy=d.getFullYear();
       const mm=String(d.getMonth()+1).padStart(2,'0');
       const dd=String(d.getDate()).padStart(2,'0');
-      d=`${yy}-${mm}-${dd}`;
-    } else if(typeof d==='string')d=d.slice(0,10);
+      return `${yy}-${mm}-${dd}`;
+    }
+    if(typeof d==='string'){
+      const s=d.trim();
+      // formato già ISO (YYYY-MM-DD...): tronca e basta
+      if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+      // formato italiano "gg-mmm-aa" o "gg-mmm-aaaa" (es. "01-mag-26", "01-mag-2026")
+      const m=s.toLowerCase().match(/^(\d{1,2})[\-\/\s]+([a-zà]{3,})[\-\/\s]+(\d{2,4})$/i);
+      if(m){
+        const gg=m[1].padStart(2,'0');
+        const meseTxt=m[2].slice(0,3);
+        const mese=MESI_IT[meseTxt];
+        let anno=m[3];
+        if(anno.length===2)anno='20'+anno;
+        if(mese)return `${anno}-${String(mese).padStart(2,'0')}-${gg}`;
+      }
+      // formato gg/mm/aaaa o gg-mm-aaaa numerico
+      const m2=s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{2,4})$/);
+      if(m2){
+        const gg=m2[1].padStart(2,'0'),mm=m2[2].padStart(2,'0');
+        let anno=m2[3];if(anno.length===2)anno='20'+anno;
+        return `${anno}-${mm}-${gg}`;
+      }
+      // fallback: prova a far interpretare la stringa al motore Date di JS
+      const tentativo=new Date(s);
+      if(!isNaN(tentativo.getTime())){
+        const yy=tentativo.getFullYear(),mm=String(tentativo.getMonth()+1).padStart(2,'0'),dd=String(tentativo.getDate()).padStart(2,'0');
+        return `${yy}-${mm}-${dd}`;
+      }
+      return s.slice(0,10); // ultima spiaggia: comportamento precedente
+    }
+    if(typeof d==='number'){
+      // numero seriale data Excel (caso in cui SheetJS non l'abbia convertito in Date)
+      const epoch=new Date(Date.UTC(1899,11,30));
+      const dt=new Date(epoch.getTime()+d*86400000);
+      const yy=dt.getUTCFullYear(),mm=String(dt.getUTCMonth()+1).padStart(2,'0'),dd=String(dt.getUTCDate()).padStart(2,'0');
+      return `${yy}-${mm}-${dd}`;
+    }
+    return null;
+  }
+
+  // Clean produzione: exclude null ID_Produzione, DataProduzione, ID_Reparto o ID_TipoProduzione
+  const prodPuliti=rawProd.filter(r=>r.ID_Produzione&&r.DataProduzione&&r.ID_Reparto&&r.ID_TipoProduzione).map(r=>{
+    const d=parseDataFlessibile(r.DataProduzione);
     return {
       ID_Produzione:Number(r.ID_Produzione),
       DataProduzione:d,
@@ -3577,7 +3621,7 @@ async function avviaImport(){
       Quantita:Number(r.Quantita)||0,
       Notturno:!!r.Notturno
     };
-  });
+  }).filter(r=>r.DataProduzione); // scarta righe dove la data non è stata interpretabile
 
   const exclTurni=rawTurni.length-turniPuliti.length;
   const exclBats=rawBats.length-batsPuliti.length;
