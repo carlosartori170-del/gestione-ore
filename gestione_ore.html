@@ -675,21 +675,6 @@ async function eliminaPreBatt(id){
 // TAB: INSERIMENTO TURNI
 // ============================================================
 async function renderInserimento(){
-  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio',{ascending:false}).limit(15);
-  const righeGG=await Promise.all((ggs||[]).map(async g=>{
-    const{data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',g.ID_Turno);
-    return `<tr>
-      <td><span class="bid">${g.ID_Dipendente}</span></td>
-      <td>${nomeDip(g.ID_Dipendente)}</td>
-      <td>${g.DataInizio}</td>
-      <td class="mono">${g.OraInizio||'—'}</td>
-      <td class="mono">${g.OraFine||'—'}</td>
-      <td>${g.Ore_A||0}h + ${g.Ore_B||0}h</td>
-      <td><span class="pill pb">${(bs||[]).length} bat.</span></td>
-      <td style="display:flex;gap:4px;"><button class="btn bo bsm" onclick="modificaTurno(${g.ID_Turno})" title="Modifica">✏</button><button class="btn br bsm" onclick="eliminaTurno(${g.ID_Turno})" title="Elimina">✕</button></td>
-    </tr>`;
-  }));
-
   document.getElementById('mc').innerHTML=`
   <div id="imsg"></div>
   <div class="card">
@@ -698,11 +683,12 @@ async function renderInserimento(){
       <div class="fg"><label>Dipendente</label>
         <select id="i-dip" onchange="caricaPreAdmin()"><option value="">— Seleziona —</option>${optDips()}</select>
       </div>
-      <div class="fg"><label>Data inizio</label><input id="i-data" type="date" value="${oggi()}" onchange="caricaPreAdmin()"></div>
+      <div class="fg"><label>Data inizio</label><input id="i-data" type="date" value="${oggi()}" onchange="caricaPreAdmin();aggRiepilogoGiorno()"></div>
       <div class="fg"><label>Ora inizio</label><input id="i-ini" type="time" oninput="calcT()"></div>
       <div class="fg"><label>Ora fine</label><input id="i-fin" type="time" oninput="calcT()"></div>
       <div class="fg"><label>Ore A / B / Tot</label><input id="i-oretot" type="text" readonly placeholder="—"></div>
     </div>
+    <div id="riepilogo-giorno"></div>
   </div>
 
   <div class="card" id="cbatt" style="display:none;">
@@ -744,10 +730,96 @@ async function renderInserimento(){
 
   <div class="card" style="margin-top:16px;">
     <div class="ct">Ultimi turni inseriti</div>
-    <div class="tw"><table>
+    <div id="ultimi-turni-box"><div class="loading">⏳ Caricamento...</div></div>
+  </div>`;
+  aggRiepilogoGiorno();
+  caricaUltimiTurni();
+}
+
+// ============================================================
+// ULTIMI TURNI INSERITI (Inserimento Turni)
+// Estratto in funzione separata per poter essere ricaricato in-place dopo
+// il salvataggio di un nuovo turno, senza ridisegnare l'intera pagina.
+// ============================================================
+async function caricaUltimiTurni(){
+  const box=document.getElementById('ultimi-turni-box');
+  if(!box)return;
+  const{data:ggs}=await sb.from('TurniGiornalieri').select('*').eq('ID_Magazzino',MAGAZZINO_ATTIVO).order('DataInizio',{ascending:false}).limit(15);
+  const righeGG=await Promise.all((ggs||[]).map(async g=>{
+    const{data:bs}=await sb.from('BattesimiTurno').select('*').eq('ID_Turno',g.ID_Turno);
+    return `<tr>
+      <td><span class="bid">${g.ID_Dipendente}</span></td>
+      <td>${nomeDip(g.ID_Dipendente)}</td>
+      <td>${g.DataInizio}</td>
+      <td class="mono">${g.OraInizio||'—'}</td>
+      <td class="mono">${g.OraFine||'—'}</td>
+      <td>${g.Ore_A||0}h + ${g.Ore_B||0}h</td>
+      <td><span class="pill pb">${(bs||[]).length} bat.</span></td>
+      <td style="display:flex;gap:4px;"><button class="btn bo bsm" onclick="modificaTurno(${g.ID_Turno})" title="Modifica">✏</button><button class="btn br bsm" onclick="eliminaTurno(${g.ID_Turno})" title="Elimina">✕</button></td>
+    </tr>`;
+  }));
+  box.innerHTML=`<div class="tw"><table>
       <thead><tr><th>ID Dip</th><th>Nome</th><th>Data</th><th>Inizio</th><th>Fine</th><th>Ore A+B</th><th>Battesimi</th><th></th></tr></thead>
       <tbody>${righeGG.join('')||'<tr><td colspan="8" class="empty">Nessun turno inserito</td></tr>'}</tbody>
-    </table></div>
+    </table></div>`;
+}
+
+// ============================================================
+// RIEPILOGO GIORNATA (Inserimento Turni)
+// Mostra, per la DataInizio selezionata nel form, quante persone hanno
+// già un turno in quel giorno e le ore totali (Ore_A+Ore_B) suddivise per
+// REPARTO (non per attività) sommando tutti i battesimi dei turni di quel giorno.
+// Si aggiorna ogni volta che cambia la data o viene salvato un nuovo turno.
+// ============================================================
+async function aggRiepilogoGiorno(){
+  const box=document.getElementById('riepilogo-giorno');
+  if(!box)return;
+  const data=document.getElementById('i-data')?.value;
+  if(!data){box.innerHTML='';return;}
+  box.innerHTML='<div class="loading" style="padding:10px;">⏳ Caricamento riepilogo...</div>';
+
+  const{data:turni,error}=await sb.from('TurniGiornalieri').select('ID_Turno,ID_Dipendente').eq('ID_Magazzino',MAGAZZINO_ATTIVO).eq('DataInizio',data);
+  if(error||!turni||!turni.length){
+    box.innerHTML=`<div class="card" style="margin-top:12px;background:var(--sfondo);">
+      <div style="font-size:0.8rem;color:var(--grigio);">Nessun turno ancora inserito per il <strong>${fmtDataIT(data)}</strong>.</div>
+    </div>`;
+    return;
+  }
+
+  const idTurni=turni.map(t=>t.ID_Turno);
+  const persone=new Set(turni.map(t=>t.ID_Dipendente).filter(Boolean));
+
+  const{data:bats}=await sb.from('BattesimiTurno').select('ID_Reparto,OreBattezzate').in('ID_Turno',idTurni);
+  const perReparto={};
+  (bats||[]).forEach(b=>{
+    if(!perReparto[b.ID_Reparto])perReparto[b.ID_Reparto]=0;
+    perReparto[b.ID_Reparto]+=(b.OreBattezzate||0);
+  });
+  const totOre=Object.values(perReparto).reduce((a,b)=>a+b,0);
+  const repIds=Object.keys(perReparto).sort((a,b)=>perReparto[b]-perReparto[a]);
+
+  const righeRep=repIds.map(idRep=>`
+    <div class="prow">
+      <span><span class="pill py">${nomeRep(idRep)}</span></span>
+      <strong>${fmtN(perReparto[idRep],2)}h</strong>
+    </div>`).join('');
+
+  box.innerHTML=`
+  <div class="card" style="margin-top:12px;background:var(--sfondo);">
+    <div style="font-size:0.67rem;font-weight:800;color:var(--blu);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">
+      📋 Riepilogo ${fmtDataIT(data)}
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:${righeRep?'10px':'0'};">
+      <div>
+        <div style="font-size:0.65rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Persone con turno</div>
+        <div class="num ok" style="font-size:1.3rem;font-weight:800;font-family:var(--mono);">${persone.size}</div>
+      </div>
+      <div>
+        <div style="font-size:0.65rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;">Ore totali</div>
+        <div class="num ok" style="font-size:1.3rem;font-weight:800;font-family:var(--mono);">${fmtN(totOre,2)}h</div>
+      </div>
+    </div>
+    ${righeRep?`<div style="border-top:1px solid var(--bordo);padding-top:8px;">${righeRep}</div>`:''}
   </div>`;
 }
 
@@ -949,7 +1021,7 @@ async function salvaTurno(){
     await sb.from('BattesimiTurno').insert({ID_Turno:turno.ID_Turno,OrdineRiga:99,ID_Reparto:p.ID_Reparto,ID_Attivita:p.ID_Attivita,OreBattezzate:p.OreBattezzate,Note:p.Note||''});
     await sb.from('BattesimiPreTurno').delete().eq('id',p.id);
   }
-  toast('✔ Turno salvato');resetIns();showTab('ti');
+  toast('✔ Turno salvato');resetIns();aggRiepilogoGiorno();caricaUltimiTurni();
 }
 
 function resetIns(){
@@ -990,6 +1062,7 @@ async function modificaTurno(id){
   if(cbatt)cbatt.style.display='block';
   if(bavanza)bavanza.style.display='none';
   renderRighe();aggBar();
+  aggRiepilogoGiorno();
 
   // Avviso
   if(msg)msg.innerHTML='<div class="alert awarn">⚠ Stai modificando il turno del '+g.DataInizio+' — il salvataggio sostituirà i battesimi esistenti. Le ore totali devono corrispondere agli orari.</div>';
@@ -1002,7 +1075,9 @@ async function eliminaTurno(id){
   if(!confirm('Eliminare questo turno e tutti i suoi battesimi?'))return;
   await sb.from('BattesimiTurno').delete().eq('ID_Turno',id);
   await sb.from('TurniGiornalieri').delete().eq('ID_Turno',id);
-  toast('Eliminato','warn');showTab('ti');
+  toast('Eliminato','warn');
+  if(document.getElementById('riepilogo-giorno')){aggRiepilogoGiorno();caricaUltimiTurni();}
+  else showTab('ti');
 }
 
 // ============================================================
@@ -2270,7 +2345,10 @@ async function filtraArchivioOperativo(){
   Object.values(batsByTurno).forEach(arr=>arr.sort((a,b)=>a.OrdineRiga-b.OrdineRiga));
 
   // Aggrega per GIORNO: ore diurne/notturne totali + suddivise per contratto, dipendenti coinvolti
+  // Se è selezionato UN SOLO reparto, aggrega anche per GIORNO+ATTIVITÀ (vista di dettaglio).
+  const repSingolo=freps.length===1?freps[0]:null;
   const perGiorno={};
+  const perGiornoAttivita={}; // chiave: "data|ID_Attivita" -> {ore, data, idAttivita}
   Object.entries(batsByTurno).forEach(([idTurnoStr,bats])=>{
     const turno=turnoById[idTurnoStr];
     if(!turno)return;
@@ -2290,6 +2368,12 @@ async function filtraArchivioOperativo(){
           if(!perGiorno[data].perContratto[idContratto])perGiorno[data].perContratto[idContratto]={diurne:0,notturne:0};
           perGiorno[data].perContratto[idContratto].diurne+=oreGiorno;
           perGiorno[data].perContratto[idContratto].notturne+=oreNotte;
+        }
+        if(repSingolo){
+          const k=data+'|'+bat.ID_Attivita;
+          if(!perGiornoAttivita[k])perGiornoAttivita[k]={data,idAttivita:bat.ID_Attivita,ore:0,dipendenti:new Set()};
+          perGiornoAttivita[k].ore+=(oreGiorno+oreNotte);
+          if(turno.ID_Dipendente)perGiornoAttivita[k].dipendenti.add(turno.ID_Dipendente);
         }
       });
     });
@@ -2351,6 +2435,34 @@ async function filtraArchivioOperativo(){
     return `<div style="margin-top:4px;">${c.NomeContratto} — Diurne: <strong style="color:var(--verde);">${fmtN(t.diurne,2)}h</strong> · Notturne: <strong style="color:var(--blu);">${fmtN(t.notturne,2)}h</strong></div>`;
   }).join('');
 
+  // Vista di dettaglio Data+Attività (solo se è selezionato un singolo reparto):
+  // una riga per ogni combinazione Data+Attività con le ore di quell'attività in quel giorno.
+  let dettaglioAttivitaHtml='';
+  if(repSingolo){
+    const chiavi=Object.keys(perGiornoAttivita).sort((a,b)=>{
+      const[da,ia]=a.split('|'),[db,ib]=b.split('|');
+      if(da!==db)return da.localeCompare(db);
+      return nomeAtt(ia).localeCompare(nomeAtt(ib));
+    });
+    const righeDett=chiavi.map(k=>{
+      const v=perGiornoAttivita[k];
+      return `<tr>
+        <td>${fmtDataIT(v.data)}</td>
+        <td><span class="pill pg">${nomeAtt(v.idAttivita)}</span></td>
+        <td><strong>${fmtN(v.ore,2)}h</strong></td>
+        <td>${v.dipendenti.size}</td>
+      </tr>`;
+    }).join('');
+    dettaglioAttivitaHtml=`
+    <div class="card" style="margin-top:14px;">
+      <div class="ct">Dettaglio per Data + Attività — ${nomeRep(repSingolo)} <span style="font-weight:400;font-size:0.74rem;color:var(--grigio);">(una riga per ogni giorno in cui è stata svolta l'attività)</span></div>
+      <div class="tw" style="overflow-x:auto;"><table style="font-size:0.76rem;">
+        <thead><tr><th>Data</th><th>Attività</th><th>Ore</th><th>Dip.</th></tr></thead>
+        <tbody>${righeDett||'<tr><td colspan="4" class="empty">Nessun dato</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+  }
+
   cont.innerHTML=`
   <div class="card" style="margin-bottom:14px;background:var(--sfondo);">
     <div style="font-size:0.85rem;color:var(--grigio);">Giorni trovati: <strong>${giorni.length}</strong> | Dipendenti coinvolti: <strong>${tuttiDip.size}</strong></div>
@@ -2385,7 +2497,8 @@ async function filtraArchivioOperativo(){
         <td>${tuttiDip.size}</td>
       </tr></tfoot>
     </table></div>
-  </div>`;
+  </div>
+  ${dettaglioAttivitaHtml}`;
 }
 
 // ============================================================
