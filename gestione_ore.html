@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v90</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v91</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -644,6 +644,16 @@ function selezionaDipendente(id,nome){
   if(search)search.value=`[${id}] ${nome}`;
   if(hidden){hidden.value=id;hidden.dispatchEvent(new Event('change'));}
   chiudiDipDropdown();
+}
+// Restituisce il dipendente successivo in ordine alfabetico rispetto a idCorrente, tra quelli
+// attivi del magazzino corrente (con wraparound: dopo l'ultimo si torna al primo).
+// Usata dopo il salvataggio di un turno per velocizzare l'inserimento in sequenza.
+function prossimoDipendente(idCorrente){
+  const lista=_dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).includes(MAGAZZINO_ATTIVO)).sort((a,b)=>a.Nome.localeCompare(b.Nome));
+  if(!lista.length)return null;
+  const idx=lista.findIndex(d=>String(d.ID_Dipendente)===String(idCorrente));
+  if(idx===-1)return null;
+  return lista[(idx+1)%lista.length];
 }
 function chiudiDipDropdown(){
   document.getElementById('i-dip-dropdown')?.classList.remove('open');
@@ -1129,11 +1139,19 @@ async function salvaTurno(){
     await sb.from('BattesimiTurno').insert({ID_Turno:turno.ID_Turno,OrdineRiga:99,ID_Reparto:p.ID_Reparto,ID_Attivita:p.ID_Attivita,OreBattezzate:p.OreBattezzate,Note:p.Note||''});
     await sb.from('BattesimiPreTurno').delete().eq('id',p.id);
   }
-  toast('✔ Turno salvato');resetIns();aggRiepilogoGiorno();caricaUltimiTurni();
+  toast('✔ Turno salvato');
+  const prossimo=prossimoDipendente(ID_Dipendente);
+  resetIns(true); // true = mantieni la data inserita, per velocizzare l'inserimento del prossimo turno nello stesso giorno
+  if(prossimo){
+    selezionaDipendente(prossimo.ID_Dipendente,prossimo.Nome);
+    document.getElementById('i-ini')?.focus();
+  }
+  aggRiepilogoGiorno();caricaUltimiTurni();
 }
 
-function resetIns(){
-  ['i-dip','i-dip-search','i-data','i-ini','i-fin','i-oretot'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
+function resetIns(mantieniData){
+  const campi=mantieniData?['i-dip','i-dip-search','i-ini','i-fin','i-oretot']:['i-dip','i-dip-search','i-data','i-ini','i-fin','i-oretot'];
+  campi.forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
   chiudiDipDropdown();
   const cb=document.getElementById('cbatt'),bav=document.getElementById('bavanza');
   if(cb)cb.style.display='none';if(bav)bav.style.display='block';
@@ -3245,7 +3263,7 @@ async function scaricaBackupCompleto(){
   try{
     const backup={
       data_backup:new Date().toISOString(),
-      versione_app:'v90',
+      versione_app:'v91',
       Magazzini:await fetchAll('Magazzini'),
       Dipendenti:await fetchAll('Dipendenti'),
       Reparti:await fetchAll('Reparti'),
