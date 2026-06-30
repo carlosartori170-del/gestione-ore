@@ -2371,9 +2371,15 @@ async function filtraArchivioOperativo(){
         }
         if(repSingolo){
           const k=data+'|'+bat.ID_Attivita;
-          if(!perGiornoAttivita[k])perGiornoAttivita[k]={data,idAttivita:bat.ID_Attivita,ore:0,dipendenti:new Set()};
-          perGiornoAttivita[k].ore+=(oreGiorno+oreNotte);
+          if(!perGiornoAttivita[k])perGiornoAttivita[k]={data,idAttivita:bat.ID_Attivita,diurne:0,notturne:0,dipendenti:new Set(),perContratto:{}};
+          perGiornoAttivita[k].diurne+=oreGiorno;
+          perGiornoAttivita[k].notturne+=oreNotte;
           if(turno.ID_Dipendente)perGiornoAttivita[k].dipendenti.add(turno.ID_Dipendente);
+          if(idContratto){
+            if(!perGiornoAttivita[k].perContratto[idContratto])perGiornoAttivita[k].perContratto[idContratto]={diurne:0,notturne:0};
+            perGiornoAttivita[k].perContratto[idContratto].diurne+=oreGiorno;
+            perGiornoAttivita[k].perContratto[idContratto].notturne+=oreNotte;
+          }
         }
       });
     });
@@ -2436,7 +2442,8 @@ async function filtraArchivioOperativo(){
   }).join('');
 
   // Vista di dettaglio Data+Attività (solo se è selezionato un singolo reparto):
-  // una riga per ogni combinazione Data+Attività con le ore di quell'attività in quel giorno.
+  // una riga per ogni combinazione Data+Attività, con ore Diu./Not. totali e suddivise per contratto
+  // (stesse colonne contratto della tabella aggregata sopra, per coerenza).
   let dettaglioAttivitaHtml='';
   if(repSingolo){
     const chiavi=Object.keys(perGiornoAttivita).sort((a,b)=>{
@@ -2446,19 +2453,38 @@ async function filtraArchivioOperativo(){
     });
     const righeDett=chiavi.map(k=>{
       const v=perGiornoAttivita[k];
+      const tot=v.diurne+v.notturne;
+      const celleContrattiDett=contrattiUsati.map(c=>{
+        const cc=v.perContratto[c.ID_Contratto]||{diurne:0,notturne:0};
+        return `<td style="border-left:2px solid var(--bordo);">${fmtN(cc.diurne,1)}</td><td>${fmtN(cc.notturne,1)}</td>`;
+      }).join('');
       return `<tr>
         <td>${fmtDataIT(v.data)}</td>
         <td><span class="pill pg">${nomeAtt(v.idAttivita)}</span></td>
-        <td><strong>${fmtN(v.ore,2)}h</strong></td>
+        <td><strong>${fmtN(tot,1)}</strong></td>
+        <td>${fmtN(v.diurne,1)}</td>
+        <td>${fmtN(v.notturne,1)}</td>
+        ${celleContrattiDett}
         <td>${v.dipendenti.size}</td>
       </tr>`;
     }).join('');
     dettaglioAttivitaHtml=`
     <div class="card" style="margin-top:14px;">
-      <div class="ct">Dettaglio per Data + Attività — ${nomeRep(repSingolo)} <span style="font-weight:400;font-size:0.74rem;color:var(--grigio);">(una riga per ogni giorno in cui è stata svolta l'attività)</span></div>
-      <div class="tw" style="overflow-x:auto;"><table style="font-size:0.76rem;">
-        <thead><tr><th>Data</th><th>Attività</th><th>Ore</th><th>Dip.</th></tr></thead>
-        <tbody>${righeDett||'<tr><td colspan="4" class="empty">Nessun dato</td></tr>'}</tbody>
+      <div class="ct">Dettaglio per Data + Attività — ${nomeRep(repSingolo)} <span style="font-weight:400;font-size:0.74rem;color:var(--grigio);">(una riga per ogni giorno in cui è stata svolta l'attività; ore in formato decimale)</span></div>
+      <div class="tw" style="overflow-x:auto;"><table style="font-size:0.76rem;white-space:nowrap;">
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align:bottom;">Data</th>
+            <th rowspan="2" style="vertical-align:bottom;">Attività</th>
+            <th rowspan="2" style="vertical-align:bottom;">Tot.</th>
+            <th rowspan="2" style="vertical-align:bottom;">Diu.</th>
+            <th rowspan="2" style="vertical-align:bottom;">Not.</th>
+            ${headerContrattiTop}
+            <th rowspan="2" style="vertical-align:bottom;">Dip.</th>
+          </tr>
+          <tr>${headerContrattiSub}</tr>
+        </thead>
+        <tbody>${righeDett||`<tr><td colspan="${6+contrattiUsati.length*2}" class="empty">Nessun dato</td></tr>`}</tbody>
       </table></div>
     </div>`;
   }
