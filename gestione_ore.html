@@ -226,7 +226,7 @@ tr:hover td{background:#f5fbf7;}
       <div class="hlogo-icon">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </div>
-      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v86</span></h1>
+      <h1>Nexus — Gestione Ore <span style="font-size:0.65rem;font-weight:700;background:rgba(255,255,255,0.18);border-radius:4px;padding:2px 7px;letter-spacing:0.04em;vertical-align:middle;">v89</span></h1>
     </div>
     <div class="hright">
       <button class="logoutbtn" id="magbtn" style="display:none;" onclick="apriSceltaMagazzino()">📦 <span id="magbtn-label">—</span></button>
@@ -560,6 +560,54 @@ async function showTab(id){
 
 // SELECT HELPERS
 function optDips(sel=''){return _dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).includes(MAGAZZINO_ATTIVO)).map(d=>`<option value="${d.ID_Dipendente}"${d.ID_Dipendente==sel?' selected':''}>[${d.ID_Dipendente}] ${d.Nome}</option>`).join('');}
+
+// ============================================================
+// AUTOCOMPLETE DIPENDENTE (Inserimento Turni)
+// Campo testo che filtra in tempo reale i dipendenti attivi del magazzino corrente
+// mentre si digita (ricerca "contiene", case/accent-insensitive). La selezione effettiva
+// resta nell'input nascosto #i-dip, esattamente come prima con la <select>, così tutto
+// il resto del codice (salvaTurno, modificaTurno, ecc.) continua a funzionare invariato.
+// ============================================================
+function _normalizzaTesto(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function filtraDipendenti(testo){
+  const dd=document.getElementById('i-dip-dropdown');
+  if(!dd)return;
+  const q=_normalizzaTesto(testo).trim();
+  const lista=_dips.filter(d=>d.Attivo&&(d.Magazzini||[1]).includes(MAGAZZINO_ATTIVO));
+  const filtrati=q?lista.filter(d=>_normalizzaTesto(d.Nome).includes(q)||String(d.ID_Dipendente).includes(q)):lista;
+  filtrati.sort((a,b)=>a.Nome.localeCompare(b.Nome));
+  if(!filtrati.length){
+    dd.innerHTML='<div style="padding:8px;font-size:0.8rem;color:var(--grigio);">Nessun dipendente trovato</div>';
+  } else {
+    dd.innerHTML=filtrati.slice(0,50).map(d=>
+      `<div class="ckitem" onmousedown="selezionaDipendente(${d.ID_Dipendente},'${d.Nome.replace(/'/g,"\\'")}')">[${d.ID_Dipendente}] ${d.Nome}</div>`
+    ).join('');
+  }
+  dd.classList.add('open');
+}
+function selezionaDipendente(id,nome){
+  const search=document.getElementById('i-dip-search');
+  const hidden=document.getElementById('i-dip');
+  if(search)search.value=`[${id}] ${nome}`;
+  if(hidden){hidden.value=id;hidden.dispatchEvent(new Event('change'));}
+  chiudiDipDropdown();
+}
+function chiudiDipDropdown(){
+  document.getElementById('i-dip-dropdown')?.classList.remove('open');
+}
+function toggleDipDropdown(){
+  const dd=document.getElementById('i-dip-dropdown');
+  if(!dd)return;
+  if(dd.classList.contains('open')){
+    chiudiDipDropdown();
+  } else {
+    const search=document.getElementById('i-dip-search');
+    filtraDipendenti(search?search.value:'');
+    search?.focus();
+  }
+}
 function optReps(sel=''){return _reparti.map(r=>`<option value="${r.ID_Reparto}"${r.ID_Reparto==sel?' selected':''}>${r.NomeReparto}</option>`).join('');}
 function optAtts(idRep='',sel=''){
   const f=idRep?_attivita.filter(a=>a.ID_Reparto==idRep):_attivita;
@@ -596,7 +644,7 @@ function toggleCkDropdown(id){
   document.getElementById(id)?.classList.toggle('open');
 }
 document.addEventListener('click',(e)=>{
-  if(!e.target.closest('.ckwrap')){
+  if(!e.target.closest('.ckwrap')&&!e.target.closest('#i-dip-dropdown')&&!e.target.closest('.dip-search-wrap')){
     document.querySelectorAll('.ckdropdown.open').forEach(d=>d.classList.remove('open'));
   }
 });
@@ -680,8 +728,15 @@ async function renderInserimento(){
   <div class="card">
     <div class="ct"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> 1 — Testata turno</div>
     <div class="g5">
-      <div class="fg"><label>Dipendente</label>
-        <select id="i-dip" onchange="caricaPreAdmin()"><option value="">— Seleziona —</option>${optDips()}</select>
+      <div class="fg" style="position:relative;"><label>Dipendente</label>
+        <div class="dip-search-wrap" style="position:relative;">
+          <input type="text" id="i-dip-search" autocomplete="off" placeholder="Scrivi per cercare..." style="width:100%;padding-right:30px;box-sizing:border-box;"
+            oninput="filtraDipendenti(this.value)" onfocus="filtraDipendenti(this.value)">
+          <button type="button" tabindex="-1" onmousedown="event.preventDefault();toggleDipDropdown()"
+            style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--grigio);font-size:0.7rem;padding:4px;">▾</button>
+        </div>
+        <input type="hidden" id="i-dip" onchange="caricaPreAdmin()">
+        <div id="i-dip-dropdown" class="ckdropdown" style="max-height:240px;overflow-y:auto;"></div>
       </div>
       <div class="fg"><label>Data inizio</label><input id="i-data" type="date" value="${oggi()}" onchange="caricaPreAdmin();aggRiepilogoGiorno()"></div>
       <div class="fg"><label>Ora inizio</label><input id="i-ini" type="time" oninput="calcT()"></div>
@@ -1025,7 +1080,8 @@ async function salvaTurno(){
 }
 
 function resetIns(){
-  ['i-dip','i-data','i-ini','i-fin','i-oretot'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
+  ['i-dip','i-dip-search','i-data','i-ini','i-fin','i-oretot'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
+  chiudiDipDropdown();
   const cb=document.getElementById('cbatt'),bav=document.getElementById('bavanza');
   if(cb)cb.style.display='none';if(bav)bav.style.display='block';
   _righe=[];_preBatt=[];
@@ -1040,12 +1096,14 @@ async function modificaTurno(id){
 
   // Precompila form testata
   const ed=document.getElementById('i-dip');
+  const edSearch=document.getElementById('i-dip-search');
   const edata=document.getElementById('i-data');
   const eini=document.getElementById('i-ini');
   const efin=document.getElementById('i-fin');
   const msg=document.getElementById('imsg');
   if(!ed){toast('Apri prima il tab Inserimento','warn');return;}
   ed.value=g.ID_Dipendente;
+  if(edSearch)edSearch.value=`[${g.ID_Dipendente}] ${nomeDip(g.ID_Dipendente)}`;
   edata.value=g.DataInizio;
   eini.value=g.OraInizio||'';
   efin.value=g.OraFine||'';
@@ -3134,7 +3192,7 @@ async function scaricaBackupCompleto(){
   try{
     const backup={
       data_backup:new Date().toISOString(),
-      versione_app:'v86',
+      versione_app:'v89',
       Magazzini:await fetchAll('Magazzini'),
       Dipendenti:await fetchAll('Dipendenti'),
       Reparti:await fetchAll('Reparti'),
